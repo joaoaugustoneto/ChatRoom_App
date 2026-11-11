@@ -1,190 +1,126 @@
-# 💬 ChatRoom
+# ChatRoom
 
-<p align="center">
-  <strong>Aplicativo moderno de bate-papo em tempo real construído com React Native, Expo, Supabase e TypeScript estrito.</strong>
-</p>
+App de mensagens em tempo real para Android, iOS e Web. O usuario entra em salas publicas ou privadas, conversa com quem esta nelas, acompanha quem esta online e ve quem esta digitando em tempo real, sem necessidade de atualizar a tela manualmente.
 
-<p align="center">
-  <img src="https://img.shields.io/badge/React_Native-0.88-61DAFB?logo=react&logoColor=black" alt="React Native" />
-  <img src="https://img.shields.io/badge/Expo_SDK-52-000020?logo=expo&logoColor=white" alt="Expo SDK" />
-  <img src="https://img.shields.io/badge/Supabase-Database_%26_Realtime-3ECF8E?logo=supabase&logoColor=white" alt="Supabase" />
-  <img src="https://img.shields.io/badge/TypeScript-5.9_Strict-3178C6?logo=typescript&logoColor=white" alt="TypeScript" />
-  <img src="https://img.shields.io/badge/Tests-57_Passing-brightgreen?logo=jest&logoColor=white" alt="Testes" />
-  <img src="https://img.shields.io/badge/CI-GitHub_Actions-2088FF?logo=github-actions&logoColor=white" alt="CI" />
-  <img src="https://img.shields.io/badge/Package_Manager-pnpm-F69220?logo=pnpm&logoColor=white" alt="pnpm" />
-</p>
+## Telas do Aplicativo
 
----
+| Login | Lista de Salas | Nova Sala |
+| :---: | :---: | :---: |
+| <img src="./docs/screenshots/login.png" width="240" alt="Tela de Login" /> | <img src="./docs/screenshots/rooms.png" width="240" alt="Lista de Salas" /> | <img src="./docs/screenshots/new_room.png" width="240" alt="Criacao de Sala" /> |
 
-## 📱 Demonstração Visual da Aplicação
+## Funcionalidades
 
-<div align="center">
-  <table>
-    <tr>
-      <td align="center" width="33%">
-        <strong>Autenticação Segura</strong><br/><br/>
-        <img src="./docs/screenshots/login.png" width="260" alt="Tela de Login" />
-      </td>
-      <td align="center" width="33%">
-        <strong>Salas & Mensagens Diretas</strong><br/><br/>
-        <img src="./docs/screenshots/rooms.png" width="260" alt="Lista de Salas" />
-      </td>
-      <td align="center" width="33%">
-        <strong>Criação & Salas Privadas</strong><br/><br/>
-        <img src="./docs/screenshots/new_room.png" width="260" alt="Nova Sala" />
-      </td>
-    </tr>
-  </table>
-</div>
+- Autenticacao com e-mail e senha (cadastro e login).
+- Perfil automatico: criacao do perfil com nome e cor de avatar via trigger no banco de dados.
+- Salas publicas e mensagens diretas (1 para 1): separacao entre salas abertas e conversas privadas com isolamento via Row Level Security (RLS).
+- Mensagens em tempo real: sincronizacao instantanea via Supabase Realtime (postgres_changes).
+- Envio otimista: a mensagem e renderizada imediatamente na interface e confirmada em segundo plano pelo servidor.
+- Presenca: contador de usuarios online na sala em tempo real (Supabase Presence).
+- Indicador de digitando: aviso efemero transmitido por canal de broadcast sem gravacao em tabela.
+- Edicao e exclusao de mensagens: permissao restrita ao autor com indicador visual de mensagem editada.
+- Reacoes em mensagens: adicao e remocao de reacoes por emoji com contagem agregada.
+- Confirmacao de leitura: marcadores de entrega e visualizacao por outros membros da sala.
+- Envio de imagens: upload de anexos para o Supabase Storage com pre-visualizacao.
+- Salas privadas: controle de acesso por codigo de convite com validacao antes do ingresso.
+- Busca de mensagens: filtro textual em tempo real no historico da sala.
 
----
+## Tecnologias
 
-## 🚀 Principais Funcionalidades
+- Frontend: React Native 0.88, Expo SDK 52, Expo Router v4, React Hook Form, Zod.
+- Estado e Cache: TanStack React Query v5.
+- Backend: Supabase (PostgreSQL 15, Auth, Storage, Realtime).
+- Seguranca: Row Level Security (RLS) e funcoes PostgreSQL com security definer.
+- Testes: Jest, React Native Testing Library e PGlite (PostgreSQL em memoria via WASM).
+- CI: GitHub Actions rodando verificacao de tipos e testes a cada commit.
 
-### 1. Mensagens em Tempo Real & Atualizações Reativas
-- **Salas Públicas e Temáticas:** Salas com ícones personalizados, tópicos de discussão e contagem de participantes em tempo real.
-- **Mensagens Diretas 1 para 1 (DMs):** Canal privado entre dois usuários, isolado estritamente por políticas de segurança RLS (Row Level Security).
-- **Indicador de Presença Online:** Exibição instantânea de quem está ativo na sala utilizando o Supabase Realtime Presence.
-- **Indicador de Digitação em Tempo Real:** Feedback visual ao vivo de outros membros redigindo mensagens via canais de Broadcast.
+## Como Executar
 
-### 2. Recursos de Mensageria Avançada (Apêndice C)
-- ✏️ **Edição de Mensagens:** Edição de mensagens enviadas com atualização otimista na interface e indicador visual discreto `(editado)`.
-- 🔒 **Salas Privadas por Convite:** Proteção por código de acesso personalizado. Novos membros só ingressam mediante validação correta do token.
-- ❤️ **Reações Rápidas com Emojis:** Agrupamento e contagem em tempo real de reações (`❤️`, `👍`, `😂`, `🔥`, `🎉`).
-- 📷 **Envio de Imagens e Mídia:** Upload para o Supabase Storage e renderização otimizada com miniaturas integradas na caixa de envio.
-- ✓✓ **Confirmação de Leitura ("Visto por"):** Registro de leitura de mensagens e indicador de visto por membros da sala.
-- 🔍 **Busca Textual Integrada:** Filtragem instantânea insensível a acentuação e caixa alta/baixa no corpo das mensagens e nomes de autores.
-- 🔔 **Notificações Push com Edge Functions:** Disparo de notificações móveis via Expo Push API acionadas por gatilhos de banco de dados e Edge Functions em Deno.
+### Pre-requisitos
 
----
+- Node.js versao 22 ou superior
+- pnpm (`npm install -g pnpm`)
 
-## 🛠️ Tecnologias Utilizadas
+### 1. Instalacao
 
-| Camada | Ferramenta / Biblioteca | Descrição |
-|---|---|---|
-| **Linguagem & Tipagem** | [TypeScript](https://www.typescriptlang.org/) | Tipagem 100% estrita sem erros de compilação. |
-| **Framework Mobile/Web**| [React Native](https://reactnative.dev/) / [Expo SDK 52](https://expo.dev/) | Desenvolvimento universal para iOS, Android e Web. |
-| **Roteamento** | [Expo Router v4](https://docs.expo.dev/router/introduction/) | Roteamento baseado em arquivos com layouts aninhados e guards de autenticação. |
-| **Backend & Banco de Dados** | [Supabase](https://supabase.com/) (PostgreSQL 15) | Auth, Storage, Realtime (Postgres Changes, Presence e Broadcast). |
-| **Segurança no Banco** | [Row Level Security (RLS)](https://supabase.com/docs/guides/auth/row-level-security) | Políticas granulares de leitura, escrita e procedures `security definer`. |
-| **Gerenciamento de Estado** | [TanStack React Query v5](https://tanstack.com/query/latest) | Cache inteligente, mutações otimistas e sincronização com Realtime. |
-| **Formulários & Validação** | [React Hook Form](https://react-hook-form.com/) + [Zod](https://zod.dev/) | Validação de formulários de autenticação e criação de salas. |
-| **Testes Automatizados** | [Jest](https://jestjs.io/) & [RNTL](https://callstack.github.io/react-native-testing-library/) | Testes unitários puros e testes assíncronos de componentes de interface. |
-| **Testes de Banco Local** | [@electric-sql/pglite](https://pglite.electric-sql.com/) | Banco PostgreSQL WASM real executado em memória pelo Node test runner nativo. |
-| **Integração Contínua** | [GitHub Actions](https://github.com/features/actions) | Pipeline de CI automatizada executando testes e typecheck a cada commit. |
-
----
-
-## 📂 Estrutura do Projeto
-
-```text
-ChatRoom_App/
-├── chatroom/                           # Projeto React Native / Expo
-│   ├── app/                            # Rotas do Expo Router
-│   │   ├── _layout.tsx                 # Root layout com providers e estilos globais web
-│   │   ├── (auth)/                     # Rotas públicas de autenticação (Login, Cadastro)
-│   │   └── (app)/                      # Rotas autenticadas
-│   │       ├── _layout.tsx             # Proteção de rotas com AuthContext
-│   │       ├── (tabs)/                 # Abas principais (Salas Públicas/DMs e Perfil)
-│   │       └── room/                   # Telas de Sala ([id].tsx) e Nova Sala (new.tsx)
-│   ├── src/
-│   │   ├── components/                 # Componentes reutilizáveis (Button, Avatar, MessageBubble...)
-│   │   ├── context/                    # Contextos globais (AuthContext)
-│   │   ├── hooks/                      # Hooks de dados e Realtime (useMessages, useRooms, usePresence...)
-│   │   ├── services/                   # Serviços de comunicação com o Supabase
-│   │   ├── theme/                      # Paleta de cores, tipografia e espaçamentos
-│   │   ├── types/                      # Definições de interfaces TypeScript centrais
-│   │   └── utils/                      # Funções puras (agrupamento, busca, reações, formatação)
-│   ├── __tests__/                      # 38 testes de funções puras e componentes RNTL
-│   ├── supabase/
-│   │   ├── schema.sql                  # Schema completo DDL, políticas RLS, gatilhos e funções
-│   │   ├── functions/                  # Supabase Edge Functions (notificações push)
-│   │   └── tests/                      # 19 testes de banco de dados executados com PGlite
-│   └── package.json
-├── docs/screenshots/                   # Imagens e capturas de tela da aplicação
-├── relatório/                          # Relatórios minuciosos de auditoria e evolução
-│   ├── relatorio_erros.md              # Relatório completo dos 9 erros encontrados e resolvidos
-│   └── implementações extras.md        # Documentação completa dos 10 desafios do Apêndice C
-└── .github/workflows/test.yml          # Pipeline de Integração Contínua (CI)
-```
-
----
-
-## ⚙️ Instalação e Execução
-
-### Pré-requisitos
-- **Node.js** v20 ou superior (recomendado v22)
-- **pnpm** instalado globalmente (`npm install -g pnpm`)
-
-### 1. Clonar o repositório
 ```bash
 git clone https://github.com/<seu-usuario>/ChatRoom_App.git
 cd ChatRoom_App/chatroom
-```
-
-### 2. Instalar as dependências
-```bash
 pnpm install
 ```
 
-### 3. Configurar variáveis de ambiente
+### 2. Variaveis de Ambiente
+
 Crie o arquivo `.env` dentro da pasta `chatroom/`:
+
 ```env
 EXPO_PUBLIC_SUPABASE_URL=https://<seu-projeto>.supabase.co
-EXPO_PUBLIC_SUPABASE_ANON_KEY=<sua-anon-key>
+EXPO_PUBLIC_SUPABASE_KEY=<sua-chave-anon-ou-publishable>
 ```
 
-### 4. Configurar o banco de dados no Supabase
-1. Acesse o seu painel do Supabase em [supabase.com](https://supabase.com).
-2. Abra o **SQL Editor**.
-3. Copie o conteúdo completo do arquivo [`chatroom/supabase/schema.sql`](./chatroom/supabase/schema.sql) e execute.
-   *O script cria todas as tabelas, índices, funções de segurança, políticas RLS e publicações Realtime necessárias.*
+### 3. Banco de Dados
 
-### 5. Iniciar o aplicativo
+1. Acesse o painel do Supabase.
+2. Abra o SQL Editor.
+3. Execute o conteudo de `chatroom/supabase/schema.sql`.
+4. Em Database -> Replication, confirme que a tabela `messages` esta com publicacao ativa para o Realtime.
+
+### 4. Executando o Projeto
+
 ```bash
-# Inicia o servidor Expo
+# Iniciar o servidor de desenvolvimento
 pnpm dev
 
-# Pressione:
-# 'w' para abrir no navegador web
-# 'a' para abrir no emulador Android
-# ou escaneie o QR Code no aplicativo Expo Go no seu celular
+# Abrir no navegador web: pressione 'w' no terminal
+# Abrir no Android: pressione 'a' no terminal ou use o Expo Go
+# Abrir no iOS: use o aplicativo Expo Go
 ```
 
----
+## Testes Automatizados
 
-## 🧪 Testes Automatizados e Qualidade
-
-O projeto conta com **57 testes automatizados** integrados e verificação estrita de TypeScript.
+O projeto conta com 57 testes automatizados cobrindo regras de negocio, funcoes puras, componentes de interface e politicas de banco de dados.
 
 ```bash
-# Executa todos os testes (App Jest + Banco de dados PGlite)
+# Executa todos os testes (app e banco de dados)
 pnpm test
 
-# Executa apenas os testes unitários e de componentes do app
+# Executa apenas os testes do app (Jest e React Native Testing Library)
 pnpm run test:app
 
-# Executa os testes de regras de banco de dados e RLS no PostgreSQL
+# Executa os testes de politicas de seguranca e funcoes no PostgreSQL (PGlite)
 pnpm run test:db
 
-# Verificação estrita de tipos TypeScript (0 erros)
+# Checagem estrita de tipos TypeScript
 pnpm run typecheck
 
-# Formatação de código com Prettier
+# Formatacao de codigo
 pnpm run format
 ```
 
----
+## Arquitetura
 
-## 📋 Relatórios Técnicos
+```
+chatroom/
+├── app/                  # Rotas e layouts do Expo Router
+│   ├── (auth)/           # Rotas publicas (login, cadastro)
+│   └── (app)/            # Rotas autenticadas (salas, perfil, nova sala)
+├── src/
+│   ├── components/       # Componentes reutilizaveis de UI
+│   ├── context/          # Contexto global de autenticacao (AuthContext)
+│   ├── hooks/            # Hooks de dados, presenca e tempo real
+│   ├── services/         # Integracao com a API do Supabase
+│   ├── theme/            # Cores, espacamentos e raios de borda
+│   ├── types/            # Tipagens centrais TypeScript
+│   └── utils/            # Funcoes puras testadas unitariamente
+├── __tests__/            # Testes unitarios e de componentes
+├── supabase/
+│   ├── schema.sql        # Definicao DDL, RLS, triggers e funcoes do banco
+│   ├── functions/        # Edge Functions (notificacoes push)
+│   └── tests/            # Testes de banco executados com PGlite
+├── docs/screenshots/     # Capturas de tela da aplicacao
+└── relatorio/            # Relatorios tecnicos do projeto
+```
 
-Dentro da pasta [`relatório/`](./relatório/) encontram-se documentos detalhados sobre o ciclo de desenvolvimento:
+## Relatorios
 
-- 📝 [**Relatório de Erros e Soluções (`relatorio_erros.md`)**](./relatório/relatorio_erros.md): Diagnóstico exaustivo de 9 problemas técnicos encontrados durante o desenvolvimento e como foram corrigidos (incluindo incompatibilidades de ESM no Jest, tipagem de `ColorValue`, conflito HTTP 409 de foreign keys em `rooms`, auto-recuperação de perfis e Caret Browsing no navegador).
-- 🏆 [**Relatório de Implementações Extras (`implementações extras.md`)**](./relatório/implementações%20extras.md): Detalhamento arquitetural, modelagem de tabelas, fluxos e evidências de validação de todos os 10 desafios do Apêndice C.
-
----
-
-## Licença
-
-Este projeto é desenvolvido para fins educacionais e de portfólio sob a licença [MIT](./LICENSE).
+- `relatorio/relatorio_erros.md`: Documentacao detalhada de todos os erros diagnosticados no desenvolvimento e suas respectivas solucoes tecnicas.
+- `relatorio/implementacoes_extras.md`: Documentacao tecnica dos 10 desafios de evolucao concluidos do Apendice C.

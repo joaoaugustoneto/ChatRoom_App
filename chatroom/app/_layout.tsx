@@ -19,6 +19,9 @@ export default function RootLayout() {
             user-select: none;
             -webkit-touch-callout: none;
           }
+          *:not(input):not(textarea):not([contenteditable="true"]) {
+            caret-color: transparent !important;
+          }
           input, textarea, [contenteditable="true"] {
             -webkit-user-select: text !important;
             user-select: text !important;

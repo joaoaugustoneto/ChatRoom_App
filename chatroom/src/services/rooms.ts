@@ -89,13 +89,33 @@ export async function createRoom(
   isPrivate = false,
   inviteCode?: string,
 ): Promise<string> {
-  // Garante a existência do perfil para evitar violação da foreign key rooms_created_by_fkey
-  await getProfile(userId);
-
   const generatedCode = isPrivate
     ? inviteCode?.trim().toUpperCase() ||
       Math.random().toString(36).slice(2, 8).toUpperCase()
     : null;
+
+  // 1. Tenta criar atomicamente via RPC (com auto-recuperação de perfil no banco)
+  try {
+    const { data: rpcRoomId, error: rpcError } = await supabase.rpc(
+      'create_room_with_member',
+      {
+        p_name: name,
+        p_description: description,
+        p_emoji: emoji,
+        p_is_private: isPrivate,
+        p_invite_code: generatedCode,
+      },
+    );
+
+    if (!rpcError && rpcRoomId) {
+      return rpcRoomId as string;
+    }
+  } catch {
+    // Caso a procedure ainda não tenha sido aplicada no Supabase, prossegue com fallback
+  }
+
+  // 2. Fluxo com garantia prévia de perfil
+  await getProfile(userId);
 
   const { data, error } = await supabase
     .from('rooms')

@@ -177,6 +177,60 @@ $$;
 revoke all on function public.get_or_create_direct_room(uuid) from public;
 grant execute on function public.get_or_create_direct_room(uuid) to authenticated;
 
+-- Função auxiliar para criação atômica de sala com membro e auto-recuperação de perfil
+create or replace function public.create_room_with_member(
+  p_name text,
+  p_description text default '',
+  p_emoji text default '💬',
+  p_is_private boolean default false,
+  p_invite_code text default null
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_room_id uuid;
+  v_user_id uuid := auth.uid();
+  v_username text;
+begin
+  if v_user_id is null then
+    raise exception 'Não autenticado';
+  end if;
+
+  -- Garante que o perfil existe em profiles antes de criar a sala
+  if not exists (select 1 from public.profiles where id = v_user_id) then
+    select coalesce(
+      nullif(trim(raw_user_meta_data->>'full_name'), ''),
+      nullif(trim(raw_user_meta_data->>'username'), ''),
+      split_part(email, '@', 1),
+      'Usuário'
+    ) into v_username
+    from auth.users where id = v_user_id;
+
+    insert into public.profiles (id, username, avatar_color)
+    values (v_user_id, coalesce(v_username, 'Usuário'), '#2563EB')
+    on conflict (id) do nothing;
+  end if;
+
+  -- Cria a sala
+  insert into public.rooms (name, description, emoji, is_private, invite_code, is_direct, created_by)
+  values (p_name, coalesce(p_description, ''), coalesce(p_emoji, '💬'), coalesce(p_is_private, false), p_invite_code, false, v_user_id)
+  returning id into v_room_id;
+
+  -- Adiciona o criador como membro
+  insert into public.room_members (room_id, user_id)
+  values (v_room_id, v_user_id)
+  on conflict do nothing;
+
+  return v_room_id;
+end;
+$$;
+
+revoke all on function public.create_room_with_member from public;
+grant execute on function public.create_room_with_member to authenticated;
+
 create policy "Membros: a própria linha e os colegas de sala"
   on public.room_members for select to authenticated
   using (user_id = auth.uid() or public.is_room_member(room_id));
