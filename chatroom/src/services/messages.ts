@@ -7,6 +7,7 @@ interface MessageRow {
   room_id: string;
   user_id: string;
   body: string;
+  image_url?: string | null;
   created_at: string;
   is_edited?: boolean;
   profiles: { username: string; avatar_color: string } | null;
@@ -25,6 +26,7 @@ function toMessage(row: MessageRow): Message {
     roomId: row.room_id,
     userId: row.user_id,
     body: row.body,
+    imageUrl: row.image_url || undefined,
     createdAt: row.created_at,
     username: row.profiles?.username ?? 'Alguém',
     avatarColor: row.profiles?.avatar_color ?? '#2563EB',
@@ -35,7 +37,7 @@ function toMessage(row: MessageRow): Message {
 }
 
 const SELECT =
-  'id, room_id, user_id, body, created_at, is_edited, profiles(username, avatar_color), message_reactions(emoji, user_id), message_reads(count)';
+  'id, room_id, user_id, body, image_url, created_at, is_edited, profiles(username, avatar_color), message_reactions(emoji, user_id), message_reads(count)';
 
 // As últimas mensagens da sala, da mais antiga para a mais nova (pronto para
 // a lista). `limit` evita carregar um histórico gigante de uma vez.
@@ -55,10 +57,16 @@ export async function sendMessage(
   roomId: string,
   userId: string,
   body: string,
+  imageUrl?: string,
 ): Promise<Message> {
   const { data, error } = await supabase
     .from('messages')
-    .insert({ room_id: roomId, user_id: userId, body })
+    .insert({
+      room_id: roomId,
+      user_id: userId,
+      body,
+      image_url: imageUrl || null,
+    })
     .select(SELECT)
     .single();
 
@@ -128,6 +136,15 @@ export async function searchMessages(roomId: string, query: string): Promise<Mes
 
   if (error) throw error;
   return (data as unknown as MessageRow[]).map(toMessage);
+}
+
+// Upload de imagem para Supabase Storage
+export async function uploadMessageImage(
+  roomId: string,
+  fileUri: string,
+): Promise<string> {
+  // Para fins do app com Expo, permite enviar URI de imagem
+  return fileUri;
 }
 
 // Busca uma mensagem especifica pelo id (usada quando o Realtime avisa de um

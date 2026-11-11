@@ -15,6 +15,7 @@ export interface Room {
   createdAt: string;
   isPrivate?: boolean;
   inviteCode?: string;
+  isDirect?: boolean;
   memberCount?: number;
 }
 
@@ -23,6 +24,7 @@ export interface Message {
   roomId: string;
   userId: string;
   body: string;
+  imageUrl?: string;
   createdAt: string;
   username: string;
   avatarColor: string;

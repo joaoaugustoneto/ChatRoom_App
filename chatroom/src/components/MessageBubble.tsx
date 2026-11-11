@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Avatar } from './Avatar';
 import { colors, radius, spacing } from '@/theme';
 import type { Message } from '@/types';
@@ -46,7 +46,16 @@ export function MessageBubble({
             pending && styles.pending,
           ]}
         >
-          <Text style={[styles.body, mine && styles.bodyMine]}>{message.body}</Text>
+          {message.imageUrl ? (
+            <Image
+              source={{ uri: message.imageUrl }}
+              style={styles.messageImage}
+              resizeMode="cover"
+            />
+          ) : null}
+          {message.body ? (
+            <Text style={[styles.body, mine && styles.bodyMine]}>{message.body}</Text>
+          ) : null}
         </Pressable>
 
         {message.reactions && message.reactions.length > 0 ? (
@@ -62,7 +71,10 @@ export function MessageBubble({
                 >
                   <Text style={styles.reactionEmoji}>{r.emoji}</Text>
                   <Text
-                    style={[styles.reactionCount, reacted && styles.reactionCountActive]}
+                    style={[
+                      styles.reactionCount,
+                      reacted && styles.reactionCountActive,
+                    ]}
                   >
                     {r.count}
                   </Text>
@@ -122,6 +134,12 @@ const styles = StyleSheet.create({
   bubbleTheirs: {
     backgroundColor: colors.bubbleTheirs,
     borderBottomLeftRadius: 4,
+  },
+  messageImage: {
+    width: 200,
+    height: 150,
+    borderRadius: radius.md,
+    marginBottom: spacing.xs,
   },
   pending: { opacity: 0.6 },
   body: { fontSize: 15, color: colors.text, lineHeight: 20 },

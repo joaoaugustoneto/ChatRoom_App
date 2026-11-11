@@ -127,6 +127,7 @@ create table public.messages (
   room_id uuid not null references public.rooms (id) on delete cascade,
   user_id uuid not null default auth.uid() references public.profiles (id) on delete cascade,
   body text not null check (char_length(trim(body)) between 1 and 2000),
+  image_url text,
   is_edited boolean not null default false,
   created_at timestamptz not null default now()
 );

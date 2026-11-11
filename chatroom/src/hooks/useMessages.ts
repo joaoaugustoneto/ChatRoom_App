@@ -152,8 +152,11 @@ export function useSendMessage(roomId: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (body: string) => {
+    mutationFn: async (args: string | { body: string; imageUrl?: string }) => {
       if (!user) throw new Error('Faça login para enviar mensagens.');
+
+      const body = typeof args === 'string' ? args : args.body;
+      const imageUrl = typeof args === 'string' ? undefined : args.imageUrl;
 
       const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
@@ -162,6 +165,7 @@ export function useSendMessage(roomId: string) {
         roomId,
         userId: user.id,
         body,
+        imageUrl,
         createdAt: new Date().toISOString(),
         username: profile?.username ?? 'Você',
         avatarColor: profile?.avatarColor ?? '#2563EB',
@@ -173,7 +177,7 @@ export function useSendMessage(roomId: string) {
       ]);
 
       try {
-        const real = await sendMessage(roomId, user.id, body);
+        const real = await sendMessage(roomId, user.id, body, imageUrl);
         queryClient.setQueryData<Message[]>(['messages', roomId], (old) =>
           old?.map((m) => (m.id === tempId ? real : m)),
         );

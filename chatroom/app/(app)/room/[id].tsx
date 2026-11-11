@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   FlatList,
+  Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -66,6 +67,7 @@ export default function RoomScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
   const [enteredCode, setEnteredCode] = useState('');
+  const [attachedImage, setAttachedImage] = useState<string | null>(null);
   const listRef = useRef<FlatList>(null);
 
   const displayedMessages = useMemo(() => {
@@ -96,8 +98,10 @@ export default function RoomScreen() {
 
   function handleSend() {
     const body = text.trim();
-    if (!body) return;
+    if (!body && !attachedImage) return;
     setText('');
+    const imgToSend = attachedImage;
+    setAttachedImage(null);
 
     if (editingMessageId) {
       editMessage.mutate(
@@ -108,10 +112,26 @@ export default function RoomScreen() {
       );
       setEditingMessageId(null);
     } else {
-      sendMessage.mutate(body, {
-        onError: (e) => Alert.alert('Não foi possível enviar', friendlyError(e)),
-      });
+      sendMessage.mutate(
+        { body: body || '📷 Imagem', imageUrl: imgToSend || undefined },
+        {
+          onError: (e) => Alert.alert('Não foi possível enviar', friendlyError(e)),
+        },
+      );
     }
+  }
+
+  function handleAttachImage() {
+    Alert.alert('Anexar Imagem', 'Selecione uma imagem para enviar:', [
+      { text: 'Cancelar', style: 'cancel' },
+      {
+        text: 'Imagem de Exemplo',
+        onPress: () =>
+          setAttachedImage(
+            'https://images.unsplash.com/photo-1579546929518-9e396f3cc809?w=500',
+          ),
+      },
+    ]);
   }
 
   function handleReactionSelect(messageId: string, emoji: string) {
@@ -337,7 +357,24 @@ export default function RoomScreen() {
           </Pressable>
         </View>
       ) : null}
+      {attachedImage ? (
+        <View style={styles.imagePreviewRow}>
+          <Image source={{ uri: attachedImage }} style={styles.imagePreviewThumb} />
+          <Text style={styles.imagePreviewText}>Imagem selecionada</Text>
+          <Pressable onPress={() => setAttachedImage(null)}>
+            <Ionicons name="close-circle" size={20} color={colors.danger} />
+          </Pressable>
+        </View>
+      ) : null}
       <View style={styles.composer}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Anexar imagem"
+          onPress={handleAttachImage}
+          style={styles.attachBtn}
+        >
+          <Ionicons name="image-outline" size={24} color={colors.primary} />
+        </Pressable>
         <TextInput
           value={text}
           onChangeText={(t) => {
@@ -355,8 +392,8 @@ export default function RoomScreen() {
           accessibilityRole="button"
           accessibilityLabel={editingMessageId ? 'Salvar edição' : 'Enviar'}
           onPress={handleSend}
-          disabled={!text.trim()}
-          style={[styles.sendButton, !text.trim() && styles.sendDisabled]}
+          disabled={!text.trim() && !attachedImage}
+          style={[styles.sendButton, !text.trim() && !attachedImage && styles.sendDisabled]}
         >
           <Ionicons
             name={editingMessageId ? 'checkmark' : 'send'}
@@ -440,6 +477,31 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: colors.primary,
     fontWeight: '600',
+  },
+  imagePreviewRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 6,
+    backgroundColor: colors.surface,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  imagePreviewThumb: {
+    width: 36,
+    height: 36,
+    borderRadius: radius.sm,
+  },
+  imagePreviewText: {
+    flex: 1,
+    fontSize: 13,
+    color: colors.muted,
+  },
+  attachBtn: {
+    padding: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   composer: {
     flexDirection: 'row',

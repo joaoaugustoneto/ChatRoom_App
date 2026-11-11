@@ -335,6 +335,26 @@ describe('mensagens', () => {
     assert.equal(editedMsg.is_edited, true);
   });
 
+  it('permite enviar e ler mensagem com imagem anexada', async () => {
+    const roomId = await createRoom(ALICE);
+    await join(BOB, roomId);
+
+    const msgRow = await as(ALICE, () =>
+      one(
+        'insert into messages (room_id, body, image_url) values ($1, $2, $3) returning id, body, image_url',
+        [roomId, 'Olha essa foto!', 'https://example.com/foto.jpg'],
+      ),
+    );
+
+    assert.equal(msgRow.body, 'Olha essa foto!');
+    assert.equal(msgRow.image_url, 'https://example.com/foto.jpg');
+
+    const bobRead = await as(BOB, () =>
+      one('select body, image_url from messages where id = $1', [msgRow.id]),
+    );
+    assert.equal(bobRead.image_url, 'https://example.com/foto.jpg');
+  });
+
   it('visitante (anon) não lê nem escreve nada', async () => {
     const roomId = await createRoom(ALICE);
     await db.exec('set role anon');
