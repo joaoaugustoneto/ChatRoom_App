@@ -8,16 +8,20 @@ interface MessageBubbleProps {
   message: Message;
   mine: boolean;
   showSender: boolean;
+  currentUserId?: string;
   pending?: boolean;
   onLongPress?: () => void;
+  onReactionPress?: (emoji: string) => void;
 }
 
 export function MessageBubble({
   message,
   mine,
   showSender,
+  currentUserId,
   pending,
   onLongPress,
+  onReactionPress,
 }: MessageBubbleProps) {
   return (
     <View style={[styles.row, mine && styles.rowMine]}>
@@ -32,7 +36,7 @@ export function MessageBubble({
           <Text style={styles.sender}>{message.username}</Text>
         ) : null}
         <Pressable
-          onLongPress={mine ? onLongPress : undefined}
+          onLongPress={onLongPress}
           style={[
             styles.bubble,
             mine ? styles.bubbleMine : styles.bubbleTheirs,
@@ -41,6 +45,30 @@ export function MessageBubble({
         >
           <Text style={[styles.body, mine && styles.bodyMine]}>{message.body}</Text>
         </Pressable>
+
+        {message.reactions && message.reactions.length > 0 ? (
+          <View style={[styles.reactionsRow, mine && styles.reactionsRowMine]}>
+            {message.reactions.map((r) => {
+              const reacted = Boolean(currentUserId && r.userIds.includes(currentUserId));
+              return (
+                <Pressable
+                  key={r.emoji}
+                  accessibilityRole="button"
+                  onPress={() => onReactionPress?.(r.emoji)}
+                  style={[styles.reactionChip, reacted && styles.reactionChipActive]}
+                >
+                  <Text style={styles.reactionEmoji}>{r.emoji}</Text>
+                  <Text
+                    style={[styles.reactionCount, reacted && styles.reactionCountActive]}
+                  >
+                    {r.count}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        ) : null}
+
         <Text style={[styles.time, mine && styles.timeMine]}>
           {pending
             ? 'enviando...'
@@ -87,4 +115,31 @@ const styles = StyleSheet.create({
   bodyMine: { color: colors.onPrimary },
   time: { fontSize: 10, color: colors.muted, marginTop: 2, marginLeft: 4 },
   timeMine: { textAlign: 'right', marginRight: 4 },
+  reactionsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 4,
+    marginTop: 4,
+  },
+  reactionsRowMine: {
+    justifyContent: 'flex-end',
+  },
+  reactionChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: colors.surface,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  reactionChipActive: {
+    backgroundColor: colors.primarySoft,
+    borderColor: colors.primary,
+  },
+  reactionEmoji: { fontSize: 12 },
+  reactionCount: { fontSize: 11, fontWeight: '700', color: colors.muted },
+  reactionCountActive: { color: colors.primary },
 });

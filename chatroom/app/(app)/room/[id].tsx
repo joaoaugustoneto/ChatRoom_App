@@ -21,6 +21,7 @@ import {
   useEditMessage,
   useMessages,
   useSendMessage,
+  useToggleReaction,
 } from '@/hooks/useMessages';
 import { useRoomPresence } from '@/hooks/usePresence';
 import {
@@ -32,8 +33,11 @@ import {
 } from '@/hooks/useRooms';
 import { useTypingIndicator } from '@/hooks/useTypingIndicator';
 import { colors, radius, spacing } from '@/theme';
+import type { Message } from '@/types';
 import { friendlyError } from '@/utils/errors';
 import { shouldGroupWithPrevious } from '@/utils/messages';
+
+const REACTION_EMOJIS = ['❤️', '👍', '😂', '🔥', '🎉'];
 
 export default function RoomScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -47,6 +51,7 @@ export default function RoomScreen() {
   const sendMessage = useSendMessage(id);
   const editMessage = useEditMessage(id);
   const deleteMessage = useDeleteMessage(id);
+  const toggleReaction = useToggleReaction(id);
   const joinRoom = useJoinRoom();
   const leaveRoom = useLeaveRoom();
   const online = useRoomPresence(isMember ? id : undefined);
@@ -86,22 +91,52 @@ export default function RoomScreen() {
     }
   }
 
-  function handleMessageOptions(messageId: string, currentBody: string) {
-    Alert.alert('Opções da mensagem', 'O que deseja fazer?', [
+  function handleReactionSelect(messageId: string, emoji: string) {
+    const targetMsg = messages.data?.find((m) => m.id === messageId);
+    const existingGroup = targetMsg?.reactions?.find((r) => r.emoji === emoji);
+    const hasReacted = Boolean(user && existingGroup?.userIds.includes(user.id));
+    toggleReaction.mutate({ messageId, emoji, hasReacted });
+  }
+
+  function handleMessageOptions(message: Message) {
+    const isMine = message.userId === user?.id;
+
+    const options: {
+      text: string;
+      style?: 'cancel' | 'destructive' | 'default';
+      onPress?: () => void;
+    }[] = [
       { text: 'Cancelar', style: 'cancel' },
       {
-        text: 'Editar',
+        text: 'Reagir...',
         onPress: () => {
-          setEditingMessageId(messageId);
-          setText(currentBody);
+          Alert.alert('Reações', 'Escolha um emoji para reagir:', [
+            ...REACTION_EMOJIS.map((emoji) => ({
+              text: emoji,
+              onPress: () => handleReactionSelect(message.id, emoji),
+            })),
+            { text: 'Cancelar', style: 'cancel' as const },
+          ]);
         },
       },
-      {
+    ];
+
+    if (isMine) {
+      options.push({
+        text: 'Editar',
+        onPress: () => {
+          setEditingMessageId(message.id);
+          setText(message.body);
+        },
+      });
+      options.push({
         text: 'Apagar',
         style: 'destructive',
-        onPress: () => deleteMessage.mutate(messageId),
-      },
-    ]);
+        onPress: () => deleteMessage.mutate(message.id),
+      });
+    }
+
+    Alert.alert('Opções da mensagem', undefined, options);
   }
 
   function confirmLeave() {
@@ -177,9 +212,11 @@ export default function RoomScreen() {
             <MessageBubble
               message={item}
               mine={item.userId === user?.id}
+              currentUserId={user?.id}
               showSender={!shouldGroupWithPrevious(item, messages.data?.[index - 1])}
               pending={item.id.startsWith('temp-')}
-              onLongPress={() => handleMessageOptions(item.id, item.body)}
+              onLongPress={() => handleMessageOptions(item)}
+              onReactionPress={(emoji) => handleReactionSelect(item.id, emoji)}
             />
           )}
           onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: false })}

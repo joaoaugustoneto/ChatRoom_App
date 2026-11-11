@@ -1,5 +1,6 @@
 import { supabase } from '@/lib/supabase';
 import type { Message } from '@/types';
+import { groupReactions } from '@/utils/reactions';
 
 interface MessageRow {
   id: string;
@@ -9,9 +10,15 @@ interface MessageRow {
   created_at: string;
   is_edited?: boolean;
   profiles: { username: string; avatar_color: string } | null;
+  message_reactions?: { emoji: string; user_id: string }[];
 }
 
 function toMessage(row: MessageRow): Message {
+  const rawReactions = (row.message_reactions ?? []).map((r) => ({
+    emoji: r.emoji,
+    userId: r.user_id,
+  }));
+
   return {
     id: row.id,
     roomId: row.room_id,
@@ -21,11 +28,12 @@ function toMessage(row: MessageRow): Message {
     username: row.profiles?.username ?? 'Alguém',
     avatarColor: row.profiles?.avatar_color ?? '#2563EB',
     isEdited: Boolean(row.is_edited),
+    reactions: groupReactions(rawReactions),
   };
 }
 
 const SELECT =
-  'id, room_id, user_id, body, created_at, is_edited, profiles (username, avatar_color)';
+  'id, room_id, user_id, body, created_at, is_edited, profiles(username, avatar_color), message_reactions(emoji, user_id)';
 
 // As últimas mensagens da sala, da mais antiga para a mais nova (pronto para
 // a lista). `limit` evita carregar um histórico gigante de uma vez.
@@ -67,6 +75,33 @@ export async function editMessage(id: string, newBody: string): Promise<void> {
 
 export async function deleteMessage(id: string): Promise<void> {
   const { error } = await supabase.from('messages').delete().eq('id', id);
+  if (error) throw error;
+}
+
+export async function addReaction(
+  messageId: string,
+  userId: string,
+  emoji: string,
+): Promise<void> {
+  const { error } = await supabase
+    .from('message_reactions')
+    .insert({ message_id: messageId, user_id: userId, emoji });
+
+  if (error && !error.message.includes('unique')) throw error;
+}
+
+export async function removeReaction(
+  messageId: string,
+  userId: string,
+  emoji: string,
+): Promise<void> {
+  const { error } = await supabase
+    .from('message_reactions')
+    .delete()
+    .eq('message_id', messageId)
+    .eq('user_id', userId)
+    .eq('emoji', emoji);
+
   if (error) throw error;
 }
 

@@ -38,8 +38,8 @@ before(async () => {
   await db.exec(SUPABASE_STUBS);
 
   const schema = readFileSync(`${SUPABASE}/schema.sql`, 'utf8').replace(
-    'alter publication supabase_realtime add table public.messages;',
-    '-- pulado no teste local: a publication do Realtime só existe no Supabase',
+    /alter publication [^\n;]+;/gi,
+    '-- pulado no teste local',
   );
   await db.exec(schema);
 
@@ -327,5 +327,48 @@ describe('mensagens', () => {
     } finally {
       await db.exec('reset role');
     }
+  });
+});
+
+describe('reações (Apêndice C)', () => {
+  it('membro pode adicionar e remover reações a uma mensagem', async () => {
+    const roomId = await createRoom(ALICE);
+    await join(BOB, roomId);
+    const msgId = await send(ALICE, roomId, 'Mensagem legal');
+
+    await as(BOB, () =>
+      db.query(
+        'insert into message_reactions (message_id, user_id, emoji) values ($1, $2, $3)',
+        [msgId, BOB, '❤️'],
+      ),
+    );
+
+    const reactions = await as(ALICE, () =>
+      rows('select emoji, user_id from message_reactions where message_id = $1', [msgId]),
+    );
+    assert.equal(reactions.length, 1);
+    assert.equal(reactions[0].emoji, '❤️');
+
+    await assert.rejects(
+      as(CARL, () =>
+        db.query(
+          'insert into message_reactions (message_id, user_id, emoji) values ($1, $2, $3)',
+          [msgId, CARL, '👍'],
+        ),
+      ),
+      /row-level security/,
+    );
+
+    await as(BOB, () =>
+      db.query('delete from message_reactions where message_id = $1 and emoji = $2', [
+        msgId,
+        '❤️',
+      ]),
+    );
+
+    const reactionsAfter = await as(ALICE, () =>
+      rows('select id from message_reactions where message_id = $1', [msgId]),
+    );
+    assert.equal(reactionsAfter.length, 0);
   });
 });

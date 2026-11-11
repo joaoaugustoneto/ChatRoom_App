@@ -1,3 +1,5 @@
+import type { GroupedReaction } from '@/utils/reactions';
+
 export interface Profile {
   id: string;
   username: string;
@@ -23,6 +25,7 @@ export interface Message {
   username: string;
   avatarColor: string;
   isEdited?: boolean;
+  reactions?: GroupedReaction[];
 }
 
 // Mensagem ainda não confirmada pelo servidor (mostrada otimisticamente).

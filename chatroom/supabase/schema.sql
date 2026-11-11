@@ -152,7 +152,49 @@ create policy "Mensagens: apagar as próprias"
 
 grant select, insert, update, delete on public.messages to authenticated;
 
--- 5) Tempo real ---------------------------------------------------------
+-- 5) Reações em mensagens (Apêndice C) -------------------------------------
+create table public.message_reactions (
+  id uuid primary key default gen_random_uuid(),
+  message_id uuid not null references public.messages (id) on delete cascade,
+  user_id uuid not null default auth.uid() references public.profiles (id) on delete cascade,
+  emoji text not null check (char_length(trim(emoji)) between 1 and 8),
+  created_at timestamptz not null default now(),
+  unique (message_id, user_id, emoji)
+);
+
+create index message_reactions_msg_idx on public.message_reactions (message_id);
+
+alter table public.message_reactions enable row level security;
+
+create policy "Reações: membros leem"
+  on public.message_reactions for select to authenticated
+  using (
+    exists (
+      select 1 from public.messages m
+      where m.id = message_reactions.message_id
+      and public.is_room_member(m.room_id)
+    )
+  );
+
+create policy "Reações: reagir como eu mesmo"
+  on public.message_reactions for insert to authenticated
+  with check (
+    user_id = auth.uid()
+    and exists (
+      select 1 from public.messages m
+      where m.id = message_reactions.message_id
+      and public.is_room_member(m.room_id)
+    )
+  );
+
+create policy "Reações: remover própria reação"
+  on public.message_reactions for delete to authenticated
+  using (user_id = auth.uid());
+
+grant select, insert, delete on public.message_reactions to authenticated;
+
+-- 6) Tempo real ---------------------------------------------------------
 -- Sem isto, os inserts em "messages" acontecem no banco mas não chegam aos
 -- outros usuários conectados: é este publish que liga a tabela ao Realtime.
 alter publication supabase_realtime add table public.messages;
+alter publication supabase_realtime add table public.message_reactions;

@@ -3,10 +3,12 @@ import { useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
 import {
+  addReaction,
   deleteMessage,
   editMessage,
   getMessage,
   listMessages,
+  removeReaction,
   sendMessage,
 } from '@/services/messages';
 import { useMyProfile } from './useMyProfile';
@@ -39,13 +41,11 @@ export function useMessages(roomId: string | undefined) {
         },
         async (payload) => {
           const id = payload.new.id as string;
-          // O evento cru não traz o nome/cor do autor (não passa pelo join do
-          // servico); buscamos a versão completa antes de mostrar.
           try {
             const full = await getMessage(id);
             queryClient.setQueryData<Message[]>(['messages', roomId], (old) => {
               if (!old) return [full];
-              if (old.some((m) => m.id === full.id)) return old; // já está lá (próprio envio)
+              if (old.some((m) => m.id === full.id)) return old;
               return [...old, full];
             });
           } catch {
@@ -88,6 +88,29 @@ export function useMessages(roomId: string | undefined) {
           );
         },
       )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'message_reactions',
+        },
+        async (payload) => {
+          const messageId =
+            (payload.new as { message_id?: string })?.message_id ??
+            (payload.old as { message_id?: string })?.message_id;
+          if (messageId) {
+            try {
+              const full = await getMessage(messageId);
+              queryClient.setQueryData<Message[]>(['messages', roomId], (old) =>
+                old?.map((m) => (m.id === messageId ? full : m)),
+              );
+            } catch {
+              // ignore
+            }
+          }
+        },
+      )
       .subscribe();
 
     return () => {
@@ -100,7 +123,6 @@ export function useMessages(roomId: string | undefined) {
 
 // Envia com atualização otimista: a mensagem aparece na hora, com um id
 // temporário, e é substituída pela confirmada assim que o servidor responde.
-// Se der erro, ela é removida e o campo de texto pode ser restaurado.
 export function useSendMessage(roomId: string) {
   const { user } = useAuth();
   const { data: profile } = useMyProfile();
@@ -162,9 +184,39 @@ export function useDeleteMessage(roomId: string) {
   return useMutation({
     mutationFn: (id: string) => deleteMessage(id),
     onMutate: async (id) => {
-      // Otimista aqui também: some da tela antes mesmo da resposta chegar.
       queryClient.setQueryData<Message[]>(['messages', roomId], (old) =>
         old?.filter((m) => m.id !== id),
+      );
+    },
+  });
+}
+
+export function useToggleReaction(roomId: string) {
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      messageId,
+      emoji,
+      hasReacted,
+    }: {
+      messageId: string;
+      emoji: string;
+      hasReacted: boolean;
+    }) => {
+      if (!user) throw new Error('Faça login para reagir.');
+      if (hasReacted) {
+        await removeReaction(messageId, user.id, emoji);
+      } else {
+        await addReaction(messageId, user.id, emoji);
+      }
+      const full = await getMessage(messageId);
+      return full;
+    },
+    onSuccess: (updated) => {
+      queryClient.setQueryData<Message[]>(['messages', roomId], (old) =>
+        old?.map((m) => (m.id === updated.id ? updated : m)),
       );
     },
   });
