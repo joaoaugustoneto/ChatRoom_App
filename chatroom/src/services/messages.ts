@@ -7,6 +7,7 @@ interface MessageRow {
   user_id: string;
   body: string;
   created_at: string;
+  is_edited?: boolean;
   profiles: { username: string; avatar_color: string } | null;
 }
 
@@ -19,11 +20,12 @@ function toMessage(row: MessageRow): Message {
     createdAt: row.created_at,
     username: row.profiles?.username ?? 'Alguém',
     avatarColor: row.profiles?.avatar_color ?? '#2563EB',
+    isEdited: Boolean(row.is_edited),
   };
 }
 
 const SELECT =
-  'id, room_id, user_id, body, created_at, profiles (username, avatar_color)';
+  'id, room_id, user_id, body, created_at, is_edited, profiles (username, avatar_color)';
 
 // As últimas mensagens da sala, da mais antiga para a mais nova (pronto para
 // a lista). `limit` evita carregar um histórico gigante de uma vez.
@@ -54,13 +56,22 @@ export async function sendMessage(
   return toMessage(data as unknown as MessageRow);
 }
 
+export async function editMessage(id: string, newBody: string): Promise<void> {
+  const { error } = await supabase
+    .from('messages')
+    .update({ body: newBody, is_edited: true })
+    .eq('id', id);
+
+  if (error) throw error;
+}
+
 export async function deleteMessage(id: string): Promise<void> {
   const { error } = await supabase.from('messages').delete().eq('id', id);
   if (error) throw error;
 }
 
 // Busca uma mensagem especifica pelo id (usada quando o Realtime avisa de um
-// INSERT: o evento vem "cru", sem o join do perfil, então buscamos completa).
+// INSERT ou UPDATE: o evento vem "cru", sem o join do perfil, então buscamos completa).
 export async function getMessage(id: string): Promise<Message> {
   const { data, error } = await supabase
     .from('messages')

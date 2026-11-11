@@ -281,6 +281,40 @@ describe('mensagens', () => {
     );
   });
 
+  it('o autor pode editar sua própria mensagem, mas outros não', async () => {
+    const roomId = await createRoom(ALICE);
+    await join(BOB, roomId);
+
+    const msgId = await send(ALICE, roomId, 'Texto original');
+
+    const bobResult = await as(BOB, () =>
+      db.query("update messages set body = 'Hack', is_edited = true where id = $1", [
+        msgId,
+      ]),
+    );
+    assert.equal(bobResult.affectedRows ?? bobResult.rowCount ?? 0, 0);
+
+    const checkMsg = await one('select body, is_edited from messages where id = $1', [
+      msgId,
+    ]);
+    assert.equal(checkMsg.body, 'Texto original');
+    assert.equal(checkMsg.is_edited, false);
+
+    const aliceResult = await as(ALICE, () =>
+      db.query(
+        "update messages set body = 'Texto editado', is_edited = true where id = $1",
+        [msgId],
+      ),
+    );
+    assert.equal(aliceResult.affectedRows ?? aliceResult.rowCount ?? 0, 1);
+
+    const editedMsg = await one('select body, is_edited from messages where id = $1', [
+      msgId,
+    ]);
+    assert.equal(editedMsg.body, 'Texto editado');
+    assert.equal(editedMsg.is_edited, true);
+  });
+
   it('visitante (anon) não lê nem escreve nada', async () => {
     const roomId = await createRoom(ALICE);
     await db.exec('set role anon');

@@ -42,7 +42,9 @@ export function MessageBubble({
           <Text style={[styles.body, mine && styles.bodyMine]}>{message.body}</Text>
         </Pressable>
         <Text style={[styles.time, mine && styles.timeMine]}>
-          {pending ? 'enviando...' : formatMessageTime(message.createdAt)}
+          {pending
+            ? 'enviando...'
+            : `${formatMessageTime(message.createdAt)}${message.isEdited ? ' (editado)' : ''}`}
         </Text>
       </View>
     </View>
@@ -67,9 +69,19 @@ const styles = StyleSheet.create({
     marginBottom: 2,
     marginLeft: 4,
   },
-  bubble: { borderRadius: radius.lg, paddingVertical: 10, paddingHorizontal: spacing.md },
-  bubbleMine: { backgroundColor: colors.bubbleMine, borderBottomRightRadius: 4 },
-  bubbleTheirs: { backgroundColor: colors.bubbleTheirs, borderBottomLeftRadius: 4 },
+  bubble: {
+    borderRadius: radius.lg,
+    paddingVertical: 10,
+    paddingHorizontal: spacing.md,
+  },
+  bubbleMine: {
+    backgroundColor: colors.bubbleMine,
+    borderBottomRightRadius: 4,
+  },
+  bubbleTheirs: {
+    backgroundColor: colors.bubbleTheirs,
+    borderBottomLeftRadius: 4,
+  },
   pending: { opacity: 0.6 },
   body: { fontSize: 15, color: colors.text, lineHeight: 20 },
   bodyMine: { color: colors.onPrimary },

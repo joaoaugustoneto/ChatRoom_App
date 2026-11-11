@@ -16,7 +16,12 @@ import { MessageBubble } from '@/components/MessageBubble';
 import { ErrorState, LoadingView } from '@/components/StateViews';
 import { TypingIndicator } from '@/components/TypingIndicator';
 import { useAuth } from '@/context/AuthContext';
-import { useDeleteMessage, useMessages, useSendMessage } from '@/hooks/useMessages';
+import {
+  useDeleteMessage,
+  useEditMessage,
+  useMessages,
+  useSendMessage,
+} from '@/hooks/useMessages';
 import { useRoomPresence } from '@/hooks/usePresence';
 import {
   useJoinRoom,
@@ -40,13 +45,16 @@ export default function RoomScreen() {
 
   const messages = useMessages(id);
   const sendMessage = useSendMessage(id);
+  const editMessage = useEditMessage(id);
   const deleteMessage = useDeleteMessage(id);
   const joinRoom = useJoinRoom();
   const leaveRoom = useLeaveRoom();
   const online = useRoomPresence(isMember ? id : undefined);
   const { typingUsernames, notifyTyping } = useTypingIndicator(isMember ? id : undefined);
   const { data: members } = useRoomMembers(id);
+
   const [text, setText] = useState('');
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const listRef = useRef<FlatList>(null);
 
   useEffect(() => {
@@ -62,14 +70,32 @@ export default function RoomScreen() {
     const body = text.trim();
     if (!body) return;
     setText('');
-    sendMessage.mutate(body, {
-      onError: (e) => Alert.alert('Não foi possível enviar', friendlyError(e)),
-    });
+
+    if (editingMessageId) {
+      editMessage.mutate(
+        { id: editingMessageId, newBody: body },
+        {
+          onError: (e) => Alert.alert('Não foi possível editar', friendlyError(e)),
+        },
+      );
+      setEditingMessageId(null);
+    } else {
+      sendMessage.mutate(body, {
+        onError: (e) => Alert.alert('Não foi possível enviar', friendlyError(e)),
+      });
+    }
   }
 
-  function confirmDelete(messageId: string) {
-    Alert.alert('Apagar mensagem', 'Esta ação não pode ser desfeita.', [
+  function handleMessageOptions(messageId: string, currentBody: string) {
+    Alert.alert('Opções da mensagem', 'O que deseja fazer?', [
       { text: 'Cancelar', style: 'cancel' },
+      {
+        text: 'Editar',
+        onPress: () => {
+          setEditingMessageId(messageId);
+          setText(currentBody);
+        },
+      },
       {
         text: 'Apagar',
         style: 'destructive',
@@ -153,13 +179,27 @@ export default function RoomScreen() {
               mine={item.userId === user?.id}
               showSender={!shouldGroupWithPrevious(item, messages.data?.[index - 1])}
               pending={item.id.startsWith('temp-')}
-              onLongPress={() => confirmDelete(item.id)}
+              onLongPress={() => handleMessageOptions(item.id, item.body)}
             />
           )}
           onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: false })}
         />
       )}
       <TypingIndicator usernames={typingUsernames} />
+      {editingMessageId ? (
+        <View style={styles.editingBanner}>
+          <Text style={styles.editingText}>Editando mensagem...</Text>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => {
+              setEditingMessageId(null);
+              setText('');
+            }}
+          >
+            <Ionicons name="close-circle" size={20} color={colors.muted} />
+          </Pressable>
+        </View>
+      ) : null}
       <View style={styles.composer}>
         <TextInput
           value={text}
@@ -167,19 +207,25 @@ export default function RoomScreen() {
             setText(t);
             if (t.length > 0) notifyTyping();
           }}
-          placeholder="Escreva uma mensagem"
+          placeholder={
+            editingMessageId ? 'Edite sua mensagem...' : 'Escreva uma mensagem'
+          }
           placeholderTextColor={colors.muted}
           style={styles.input}
           multiline
         />
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="Enviar"
+          accessibilityLabel={editingMessageId ? 'Salvar edição' : 'Enviar'}
           onPress={handleSend}
           disabled={!text.trim()}
           style={[styles.sendButton, !text.trim() && styles.sendDisabled]}
         >
-          <Ionicons name="send" size={18} color={colors.onPrimary} />
+          <Ionicons
+            name={editingMessageId ? 'checkmark' : 'send'}
+            size={18}
+            color={colors.onPrimary}
+          />
         </Pressable>
       </View>
     </KeyboardAvoidingView>
@@ -198,6 +244,21 @@ const styles = StyleSheet.create({
   onlineDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.online },
   onlineText: { fontSize: 12, color: colors.muted },
   list: { padding: spacing.md, gap: 2 },
+  editingBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.md,
+    paddingVertical: 6,
+    backgroundColor: colors.primarySoft,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  editingText: {
+    fontSize: 13,
+    color: colors.primary,
+    fontWeight: '600',
+  },
   composer: {
     flexDirection: 'row',
     alignItems: 'flex-end',

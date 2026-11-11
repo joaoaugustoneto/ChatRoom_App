@@ -22,6 +22,7 @@ export interface Message {
   createdAt: string;
   username: string;
   avatarColor: string;
+  isEdited?: boolean;
 }
 
 // Mensagem ainda não confirmada pelo servidor (mostrada otimisticamente).

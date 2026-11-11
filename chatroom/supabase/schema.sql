@@ -1,4 +1,6 @@
--- 1) Perfis
+-- ChatRoom: esquema do banco (execute no SQL Editor do Supabase)
+
+-- 1) Perfis --------------------------------------------------------------
 -- Uma linha por usuário, criada automaticamente (veja o gatilho abaixo).
 -- É daqui que vêm o nome e a cor mostrados nas mensagens.
 create table public.profiles (
@@ -36,8 +38,8 @@ begin
       nullif(trim(new.raw_user_meta_data ->> 'full_name'), ''),
       split_part(new.email, '@', 1)
     ),
-    (array['#2563EB', '#7C3AED', '#DB2777', '#059669', '#D97706', '#DC2626', '#089182'])
-    [1 + floor(random() * 7)]
+    (array['#2563EB', '#7C3AED', '#DB2777', '#059669', '#D97706', '#DC2626', '#0891B2'])
+      [1 + floor(random() * 7)]
   );
   return new;
 end;
@@ -48,12 +50,12 @@ create trigger on_auth_user_created
   after insert on auth.users
   for each row execute function public.handle_new_user();
 
--- 2) Salas
+-- 2) Salas ----------------------------------------------------------------
 create table public.rooms (
   id uuid primary key default gen_random_uuid(),
   name text not null check (char_length(trim(name)) between 2 and 60),
   description text not null default '',
-  emoji text not null default '',
+  emoji text not null default '💬',
   created_by uuid not null default auth.uid() references public.profiles (id),
   created_at timestamptz not null default now()
 );
@@ -69,7 +71,7 @@ create policy "Salas: criar como dono"
 
 grant select, insert on public.rooms to authenticated;
 
--- 3) Participação nas salas
+-- 3) Participação nas salas ------------------------------------------------
 -- Entrar numa sala é um ato explícito: só quem tem uma linha aqui consegue
 -- ler ou mandar mensagem naquela sala (políticas de "messages" abaixo).
 create table public.room_members (
@@ -81,12 +83,12 @@ create table public.room_members (
 
 alter table public.room_members enable row level security;
 
--- "Você está nesta sala?" numa função à parte, e não direto na política.
+-- "Você está nesta sala?" — numa função à parte, e não direto na política.
 -- Uma política de "room_members" que consultasse "room_members" de novo
 -- reaplicaria essa MESMA política à subconsulta, causando recursão infinita
 -- de verdade (o Postgres recusa com o erro "infinite recursion detected").
 -- Com "security definer", a função consulta a tabela ignorando o RLS por
--- dentro, e a política só chama a função sem se referenciar de volta.
+-- dentro, e a política só chama a função — sem se referenciar de volta.
 create or replace function public.is_room_member(p_room_id uuid)
 returns boolean
 language sql
@@ -117,12 +119,13 @@ create policy "Membros: sair (apagar a própria linha)"
 
 grant select, insert, delete on public.room_members to authenticated;
 
--- 4) Mensagens
+-- 4) Mensagens --------------------------------------------------------------
 create table public.messages (
   id uuid primary key default gen_random_uuid(),
   room_id uuid not null references public.rooms (id) on delete cascade,
   user_id uuid not null default auth.uid() references public.profiles (id) on delete cascade,
   body text not null check (char_length(trim(body)) between 1 and 2000),
+  is_edited boolean not null default false,
   created_at timestamptz not null default now()
 );
 
@@ -138,13 +141,18 @@ create policy "Mensagens: enviar nas salas em que estou"
   on public.messages for insert to authenticated
   with check (user_id = auth.uid() and public.is_room_member(room_id));
 
+create policy "Mensagens: editar as próprias"
+  on public.messages for update to authenticated
+  using (user_id = auth.uid())
+  with check (user_id = auth.uid());
+
 create policy "Mensagens: apagar as próprias"
   on public.messages for delete to authenticated
   using (user_id = auth.uid());
 
-grant select, insert, delete on public.messages to authenticated;
+grant select, insert, update, delete on public.messages to authenticated;
 
--- 5) Tempo real
+-- 5) Tempo real ---------------------------------------------------------
 -- Sem isto, os inserts em "messages" acontecem no banco mas não chegam aos
 -- outros usuários conectados: é este publish que liga a tabela ao Realtime.
 alter publication supabase_realtime add table public.messages;

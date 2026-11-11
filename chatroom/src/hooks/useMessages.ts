@@ -4,6 +4,7 @@ import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
 import {
   deleteMessage,
+  editMessage,
   getMessage,
   listMessages,
   sendMessage,
@@ -11,7 +12,7 @@ import {
 import { useMyProfile } from './useMyProfile';
 import type { Message } from '@/types';
 
-// Histórico da sala e inscrição no Realtime: qualquer INSERT ou DELETE na
+// Histórico da sala e inscrição no Realtime: qualquer INSERT, UPDATE ou DELETE na
 // tabela "messages" desta sala chega aqui e atualiza a lista sozinho, em
 // qualquer aparelho que esteja com a tela aberta.
 export function useMessages(roomId: string | undefined) {
@@ -49,6 +50,26 @@ export function useMessages(roomId: string | undefined) {
             });
           } catch {
             // A mensagem pode ter sido apagada entre o evento e a busca — ignore.
+          }
+        },
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'messages',
+          filter: `room_id=eq.${roomId}`,
+        },
+        async (payload) => {
+          const id = payload.new.id as string;
+          try {
+            const full = await getMessage(id);
+            queryClient.setQueryData<Message[]>(['messages', roomId], (old) =>
+              old?.map((m) => (m.id === id ? full : m)),
+            );
+          } catch {
+            // Ignorar se a mensagem foi removida no intervalo
           }
         },
       )
@@ -118,6 +139,19 @@ export function useSendMessage(roomId: string) {
         );
         throw error;
       }
+    },
+  });
+}
+
+export function useEditMessage(roomId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, newBody }: { id: string; newBody: string }) =>
+      editMessage(id, newBody),
+    onMutate: async ({ id, newBody }) => {
+      queryClient.setQueryData<Message[]>(['messages', roomId], (old) =>
+        old?.map((m) => (m.id === id ? { ...m, body: newBody, isEdited: true } : m)),
+      );
     },
   });
 }
