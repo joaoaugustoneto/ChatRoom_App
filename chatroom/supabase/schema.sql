@@ -285,3 +285,36 @@ grant select, insert on public.message_reads to authenticated;
 alter publication supabase_realtime add table public.messages;
 alter publication supabase_realtime add table public.message_reactions;
 alter publication supabase_realtime add table public.message_reads;
+
+-- 8) Tokens de notificação push e gatilho de disparo (Apêndice C) -------
+create table public.user_push_tokens (
+  user_id uuid primary key references public.profiles (id) on delete cascade,
+  push_token text not null check (char_length(trim(push_token)) between 5 and 200),
+  updated_at timestamptz not null default now()
+);
+
+alter table public.user_push_tokens enable row level security;
+
+create policy "Tokens de push: gerenciar apenas o próprio token"
+  on public.user_push_tokens for all to authenticated
+  using (user_id = auth.uid())
+  with check (user_id = auth.uid());
+
+grant select, insert, update, delete on public.user_push_tokens to authenticated;
+
+-- Função e gatilho acionados ao criar mensagem
+create or replace function public.notify_room_members_on_message()
+returns trigger
+language plpgsql
+security definer
+as $$
+begin
+  -- Registra gatilho para acionamento de Webhook / Edge Function no Supabase
+  return NEW;
+end;
+$$;
+
+drop trigger if exists on_message_created_notify on public.messages;
+create trigger on_message_created_notify
+  after insert on public.messages
+  for each row execute function public.notify_room_members_on_message();

@@ -1,10 +1,13 @@
 import { Redirect, Stack } from 'expo-router';
 import { LoadingView } from '@/components/StateViews';
 import { useAuth } from '@/context/AuthContext';
+import { usePushNotifications } from '@/hooks/usePushNotifications';
 import { colors } from '@/theme';
 
 export default function AppLayout() {
   const { session, loading } = useAuth();
+  usePushNotifications();
+
   if (loading) return <LoadingView />;
   if (!session) return <Redirect href="/login" />; // sem sessão: vai para o login
 

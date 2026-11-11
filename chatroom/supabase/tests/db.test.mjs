@@ -495,3 +495,57 @@ describe('confirmação de leitura (Apêndice C)', () => {
     );
   });
 });
+
+describe('notificações push (Apêndice C)', () => {
+  it('usuário registra, atualiza e deleta seu próprio token de push com proteção RLS', async () => {
+    // Alice cadastra seu token
+    await as(ALICE, () =>
+      db.query(
+        'insert into user_push_tokens (user_id, push_token) values ($1, $2)',
+        [ALICE, 'ExponentPushToken[alice-token-123]'],
+      ),
+    );
+
+    const aliceToken = await as(ALICE, () =>
+      one('select push_token from user_push_tokens where user_id = $1', [ALICE]),
+    );
+    assert.equal(aliceToken.push_token, 'ExponentPushToken[alice-token-123]');
+
+    // Bob não consegue ver nem alterar o token de Alice
+    const bobViewAliceToken = await as(BOB, () =>
+      rows('select push_token from user_push_tokens where user_id = $1', [ALICE]),
+    );
+    assert.equal(bobViewAliceToken.length, 0);
+
+    const bobUpdateAlice = await as(BOB, () =>
+      db.query(
+        "update user_push_tokens set push_token = 'ExponentPushToken[hacked]' where user_id = $1",
+        [ALICE],
+      ),
+    );
+    assert.equal(bobUpdateAlice.affectedRows ?? bobUpdateAlice.rowCount ?? 0, 0);
+
+    // Alice atualiza o próprio token
+    await as(ALICE, () =>
+      db.query(
+        "update user_push_tokens set push_token = 'ExponentPushToken[alice-new-456]' where user_id = $1",
+        [ALICE],
+      ),
+    );
+
+    const aliceUpdated = await as(ALICE, () =>
+      one('select push_token from user_push_tokens where user_id = $1', [ALICE]),
+    );
+    assert.equal(aliceUpdated.push_token, 'ExponentPushToken[alice-new-456]');
+
+    // Alice apaga seu token
+    await as(ALICE, () =>
+      db.query('delete from user_push_tokens where user_id = $1', [ALICE]),
+    );
+
+    const aliceDeleted = await as(ALICE, () =>
+      rows('select push_token from user_push_tokens where user_id = $1', [ALICE]),
+    );
+    assert.equal(aliceDeleted.length, 0);
+  });
+});
