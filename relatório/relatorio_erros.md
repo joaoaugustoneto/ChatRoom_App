@@ -201,7 +201,98 @@ Este documento detalha todos os erros identificados durante a análise e impleme
 
 ---
 
-## 10. Resumo Geral de Validações de Qualidade e Segurança
+## 10. Falha no Envio de Mensagens e Dessincronização por Falta de Fallback (`messages.ts`)
+
+- **Etapa Relacionada:** Etapa 12 / Desafios do Apêndice C
+- **Arquivos Afetados:** `chatroom/src/services/messages.ts`, `chatroom/src/hooks/useMessages.ts`, `chatroom/app/(app)/room/[id].tsx`
+- **Sintoma:** O usuário tenta enviar mensagens numa sala mas o envio falha ou a mensagem desaparece logo após ser digitada.
+- **Causa Raiz:**
+  1. No Apêndice C, a consulta principal de mensagens (`SELECT`) incluiu colunas e tabelas relacionais extras (`image_url`, `is_edited`, `message_reactions`, `message_reads`). Caso o banco de dados remoto do usuário ainda não tivesse executado os scripts SQL das funcionalidades extras, o PostgREST devolvia erro de coluna ou relação inexistente.
+  2. A função `getMessage(id)` (acionada pelo Supabase Realtime a cada novo `INSERT`) não possuía fallback seguro, quebrando o listener de tempo real caso a consulta falhasse.
+  3. No envio da mensagem (`sendMessage`), se a verificação de membro ou chave estrangeira com `profiles` falhasse, a mensagem não era inserida.
+- **Solução Aplicada:**
+  1. Criação da constante `BASE_SELECT = 'id, room_id, user_id, body, created_at, profiles(username, avatar_color)'` como fallback transparente em `listMessages`, `sendMessage`, `searchMessages` e `getMessage`.
+  2. Implementação de tentativa primária com o payload completo e fallback automático para o formato base caso ocorra qualquer incompatibilidade com o esquema remoto.
+  3. Adição do gatilho `onSubmitEditing={handleSend}` e detecção da tecla `Enter` no navegador web (sem `Shift`), além de alertas amigáveis caso ocorra recusa de permissão do banco.
+
+---
+
+## 11. Falha na Confirmação de Cadastro via Link de E-mail
+
+- **Etapa Relacionada:** Etapa 10 (Autenticação e Cadastro)
+- **Arquivos Afetados:** `chatroom/src/context/AuthContext.tsx`, `chatroom/app/(auth)/register.tsx`
+- **Sintoma:** Ao receber o e-mail de confirmação do Supabase e clicar no botão/link de verificação, a página não abre ou exibe erro de conexão recusada (`ERR_CONNECTION_REFUSED` em `http://localhost:3000`).
+- **Causa Raiz:**
+  1. Por padrão, projetos recém-criados no painel do Supabase possuem a URL do site (`Site URL`) configurada para `http://localhost:3000`.
+  2. O servidor de desenvolvimento do Expo Web roda na porta `8081` (`http://localhost:8081`), e o aplicativo móvel utiliza esquemas de deep link (`chatroom://` ou `exp://`).
+  3. A função `supabase.auth.signUp` não enviava a propriedade `emailRedirectTo`, fazendo com que o Supabase redirecionasse para o host padrão inexistente.
+- **Solução Aplicada:**
+  1. Configurado o parâmetro `emailRedirectTo` na chamada de cadastro do `AuthContext`:
+     - No navegador web: utiliza dinamicamente `window.location.origin` (por exemplo, `http://localhost:8081`).
+     - No mobile nativo: utiliza `Linking.createURL('/')` (esquema `chatroom://`).
+  2. Configurado o ouvinte `Linking.addEventListener('url', ...)` no `AuthContext` para capturar retornos profundos com código PKCE ou tokens e autenticar automaticamente a sessão.
+  3. Orientação no guia para adicionar `http://localhost:8081` nas *Redirect URLs* no painel do Supabase (`Authentication -> URL Configuration`), ou alternativamente desmarcar a opção *Confirm email* em `Authentication -> Providers -> Email` durante o desenvolvimento local.
+
+---
+
+## 12. Impossibilidade de Encerrar a Sessão (Sair da Conta) no Navegador Web e em Erros de Conexão
+
+- **Etapa Relacionada:** Etapa 13 (Perfil e Logout)
+- **Arquivos Afetados:** `chatroom/app/(app)/(tabs)/profile.tsx`, `chatroom/src/context/AuthContext.tsx`
+- **Sintoma:** O usuário clica em "Sair da conta" na aba de Perfil, confirma a ação ou clica no botão, mas nada acontece e a conta continua logada.
+- **Causa Raiz:**
+  1. A implementação padrão do React Native Web para `Alert.alert(title, msg, buttons)` delega a chamada para o método nativo `window.alert()`, descartando completamente o vetor de botões com as ações de callback `onPress`. Dessa forma, o comando de saída nunca era executado no navegador.
+  2. Caso o endpoint remoto do Supabase falhasse ou a conexão com a internet estivesse instável, a promessa de `supabase.auth.signOut()` lançava uma exceção não tratada, impedindo a limpeza do estado local de sessão.
+- **Solução Aplicada:**
+  1. Em `chatroom/app/(app)/(tabs)/profile.tsx`, adicionada verificação para `Platform.OS === 'web'` utilizando `window.confirm('Deseja encerrar a sessão?')`. Ao confirmar, a função `signOut()` é disparada de imediato.
+  2. Em `chatroom/src/context/AuthContext.tsx`, encapsulada a rotina de logout em um bloco `try / finally`. Mesmo se a chamada remota falhar ou o token de acesso já estiver expirado no servidor, o estado local `setSession(null)` e a limpeza de cache `queryClient.clear()` são executados com garantia no bloco `finally`, forçando o redirecionamento imediato para a tela de login.
+
+---
+
+## 13. Impossibilidade de Atualizar o Nome de Usuário (Perfil)
+
+- **Etapa Relacionada:** Etapa 13 (Perfil do Usuário)
+- **Arquivos Afetados:** `chatroom/src/services/profile.ts`, `chatroom/src/hooks/useMyProfile.ts`, `chatroom/app/(app)/(tabs)/profile.tsx`
+- **Sintoma:** Ao editar o nome no perfil e salvar, a alteração não persistia ou exibia erro de permissão.
+- **Causa Raiz:**
+  1. O método `updateUsername` utilizava apenas `supabase.from('profiles').update({ username }).eq('id', userId)`. Se a linha do usuário em `profiles` não existisse (por exemplo, conta criada antes da criação do gatilho), o comando `UPDATE` não afetava nenhuma linha silenciosamente.
+  2. Os metadados de autenticação da conta (`raw_user_meta_data.username` e `full_name`) não estavam sincronizados com o Supabase Auth.
+- **Solução Aplicada:**
+  1. Em `src/services/profile.ts`, a função `updateUsername` sincroniza primeiro os metadados do usuário em `supabase.auth.updateUser({ data: { full_name: username, username } })`.
+  2. Em seguida, tenta o `UPDATE` na tabela `profiles`. Caso não exista linha afetada, aciona o `upsert` com auto-recuperação do perfil.
+  3. No hook `useMyProfile.ts`, adicionada atualização otimista instantânea no cache do React Query (`queryClient.setQueryData`), refletindo o novo nome na interface no mesmo milissegundo em que o usuário clica em "Salvar".
+  4. Suporte a feedback na Web com `window.alert` para avisos de validação (mínimo de 2 caracteres).
+
+---
+
+## 14. Sobreposição da Interface sob os Botões do Celular (Problema de Responsividade e Safe Area)
+
+- **Etapa Relacionada:** Responsividade em Dispositivos Móveis (Android / iOS)
+- **Arquivos Afetados:** `chatroom/src/components/Screen.tsx`, `chatroom/app/(app)/(tabs)/_layout.tsx`, `chatroom/app/(app)/(tabs)/index.tsx`, `chatroom/app/(app)/room/[id].tsx`
+- **Sintoma:** No celular Android ou iOS moderno, os elementos da parte inferior da tela (como a barra de abas "Salas / Perfil", o botão flutuante '+' e a caixa de digitação de mensagens) ficavam cortados ou escondidos atrás da barra de navegação do sistema (botões virtuais de Voltar/Home ou barra de gestos).
+- **Causa Raiz:**
+  1. O componente `Screen.tsx` definia `edges = ['top', 'left', 'right']`, omitindo intencionalmente a borda `'bottom'` do `SafeAreaView`.
+  2. No layout de abas (`chatroom/app/(app)/(tabs)/_layout.tsx`), a propriedade `tabBarStyle` não calculava a margem de segurança inferior (`insets.bottom`), resultando em altura estática insuficiente em dispositivos com botões de navegação virtuais habilitados.
+  3. No composer da sala de chat (`chatroom/app/(app)/room/[id].tsx`), o container de envio de mensagem utilizava espaçamento fixo na base, fazendo o campo de texto ficar ocultado pelos botões de sistema do aparelho.
+- **Solução Aplicada:**
+  1. Em `Screen.tsx`, ajustadas as bordas de segurança padrão para `edges = ['top', 'left', 'right', 'bottom']`.
+  2. Em `chatroom/app/(app)/(tabs)/_layout.tsx`, importado `useSafeAreaInsets` e aplicada a altura dinâmica:
+     ```tsx
+     tabBarStyle: {
+       height: 60 + Math.max(insets.bottom, 8),
+       paddingBottom: Math.max(insets.bottom, 8),
+       paddingTop: 8,
+       backgroundColor: colors.surface,
+       borderTopColor: colors.border,
+     }
+     ```
+  3. Em `chatroom/app/(app)/(tabs)/index.tsx`, adicionado espaçamento dinâmico no botão flutuante: `style={[styles.fab, { bottom: spacing.lg + insets.bottom }]}` e no final da lista de salas.
+  4. Em `chatroom/app/(app)/room/[id].tsx`, ajustado o estilo do composer: `style={[styles.composer, { paddingBottom: Math.max(insets.bottom, spacing.md) }]}`.
+  Com isso, tanto em aparelhos Android com botões virtuais tradicionais quanto em iPhones com entalhe/Dynamic Island, a interface mantém distância perfeita dos controles do sistema operacional.
+
+---
+
+## 15. Resumo Geral de Validações de Qualidade e Segurança
 
 Ao término de todas as etapas (1 a 14) do guia principal e de todos os 10 desafios do Apêndice C:
 

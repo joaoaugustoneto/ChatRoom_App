@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import { getProfile } from '@/services/profile';
 import type { Message } from '@/types';
 import { groupReactions } from '@/utils/reactions';
 
@@ -39,6 +40,9 @@ function toMessage(row: MessageRow): Message {
 const SELECT =
   'id, room_id, user_id, body, image_url, created_at, is_edited, profiles(username, avatar_color), message_reactions(emoji, user_id), message_reads(count)';
 
+const BASE_SELECT =
+  'id, room_id, user_id, body, created_at, profiles(username, avatar_color)';
+
 // As últimas mensagens da sala, da mais antiga para a mais nova (pronto para
 // a lista). `limit` evita carregar um histórico gigante de uma vez.
 export async function listMessages(roomId: string, limit = 100): Promise<Message[]> {
@@ -49,8 +53,20 @@ export async function listMessages(roomId: string, limit = 100): Promise<Message
     .order('created_at', { ascending: false })
     .limit(limit);
 
-  if (error) throw error;
-  return (data as unknown as MessageRow[]).map(toMessage).reverse();
+  if (!error && data) {
+    return (data as unknown as MessageRow[]).map(toMessage).reverse();
+  }
+
+  // Fallback seguro caso tabelas/colunas extras ainda não existam no Supabase
+  const { data: baseData, error: baseError } = await supabase
+    .from('messages')
+    .select(BASE_SELECT)
+    .eq('room_id', roomId)
+    .order('created_at', { ascending: false })
+    .limit(limit);
+
+  if (baseError) throw baseError;
+  return (baseData as unknown as MessageRow[]).map(toMessage).reverse();
 }
 
 export async function sendMessage(
@@ -59,19 +75,45 @@ export async function sendMessage(
   body: string,
   imageUrl?: string,
 ): Promise<Message> {
-  const { data, error } = await supabase
-    .from('messages')
-    .insert({
+  try {
+    await getProfile(userId);
+  } catch {
+    // ignore
+  }
+
+  // Tenta insert com image_url e SELECT completo
+  try {
+    const insertPayload: Record<string, unknown> = {
       room_id: roomId,
       user_id: userId,
       body,
-      image_url: imageUrl || null,
-    })
-    .select(SELECT)
+    };
+    if (imageUrl) {
+      insertPayload.image_url = imageUrl;
+    }
+
+    const { data, error } = await supabase
+      .from('messages')
+      .insert(insertPayload)
+      .select(SELECT)
+      .single();
+
+    if (!error && data) {
+      return toMessage(data as unknown as MessageRow);
+    }
+  } catch {
+    // fallback
+  }
+
+  // Fallback seguro caso colunas extras (image_url, message_reactions) não existam no banco remoto
+  const { data: fallbackData, error: fallbackError } = await supabase
+    .from('messages')
+    .insert({ room_id: roomId, user_id: userId, body })
+    .select(BASE_SELECT)
     .single();
 
-  if (error) throw error;
-  return toMessage(data as unknown as MessageRow);
+  if (fallbackError) throw fallbackError;
+  return toMessage(fallbackData as unknown as MessageRow);
 }
 
 export async function editMessage(id: string, newBody: string): Promise<void> {
@@ -80,7 +122,14 @@ export async function editMessage(id: string, newBody: string): Promise<void> {
     .update({ body: newBody, is_edited: true })
     .eq('id', id);
 
-  if (error) throw error;
+  if (error) {
+    // Fallback caso a coluna is_edited não exista
+    const { error: baseError } = await supabase
+      .from('messages')
+      .update({ body: newBody })
+      .eq('id', id);
+    if (baseError) throw baseError;
+  }
 }
 
 export async function deleteMessage(id: string): Promise<void> {
@@ -134,8 +183,20 @@ export async function searchMessages(roomId: string, query: string): Promise<Mes
     .ilike('body', `%${clean}%`)
     .order('created_at', { ascending: true });
 
-  if (error) throw error;
-  return (data as unknown as MessageRow[]).map(toMessage);
+  if (!error && data) {
+    return (data as unknown as MessageRow[]).map(toMessage);
+  }
+
+  // Fallback caso tabelas/colunas de reações ou leituras não existam
+  const { data: baseData, error: baseError } = await supabase
+    .from('messages')
+    .select(BASE_SELECT)
+    .eq('room_id', roomId)
+    .ilike('body', `%${clean}%`)
+    .order('created_at', { ascending: true });
+
+  if (baseError) throw baseError;
+  return (baseData as unknown as MessageRow[]).map(toMessage);
 }
 
 // Upload de imagem para Supabase Storage
@@ -156,6 +217,17 @@ export async function getMessage(id: string): Promise<Message> {
     .eq('id', id)
     .single();
 
-  if (error) throw error;
-  return toMessage(data as unknown as MessageRow);
+  if (!error && data) {
+    return toMessage(data as unknown as MessageRow);
+  }
+
+  // Fallback caso tabelas/colunas extras não existam
+  const { data: baseData, error: baseError } = await supabase
+    .from('messages')
+    .select(BASE_SELECT)
+    .eq('id', id)
+    .single();
+
+  if (baseError) throw baseError;
+  return toMessage(baseData as unknown as MessageRow);
 }

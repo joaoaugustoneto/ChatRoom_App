@@ -1,6 +1,8 @@
 import type { Session, User } from '@supabase/supabase-js';
+import * as Linking from 'expo-linking';
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
+import { Platform } from 'react-native';
 import { queryClient } from '@/lib/queryClient';
 import { supabase } from '@/lib/supabase';
 
@@ -34,7 +36,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!newSession) queryClient.clear(); // não vazar dados entre contas
     });
 
-    return () => data.subscription.unsubscribe();
+    // Trata links de confirmação de e-mail e autenticação profunda
+    const handleUrl = async (url: string | null) => {
+      if (!url) return;
+      try {
+        const parsed = Linking.parse(url);
+        const code = parsed.queryParams?.code;
+        if (typeof code === 'string') {
+          await supabase.auth.exchangeCodeForSession(code);
+        }
+      } catch (err) {
+        console.warn('Erro ao processar callback de autenticação:', err);
+      }
+    };
+
+    Linking.getInitialURL().then(handleUrl);
+    const sub = Linking.addEventListener('url', ({ url }) => void handleUrl(url));
+
+    return () => {
+      data.subscription.unsubscribe();
+      sub.remove();
+    };
   }, []);
 
   const value = useMemo<AuthContextValue>(
@@ -47,17 +69,41 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (error) throw error;
       },
       signUp: async (name, email, password) => {
+        let emailRedirectTo: string | undefined;
+        try {
+          if (
+            Platform.OS === 'web' &&
+            typeof window !== 'undefined' &&
+            window.location?.origin
+          ) {
+            emailRedirectTo = window.location.origin;
+          } else {
+            emailRedirectTo = Linking.createURL('/');
+          }
+        } catch {
+          // ignore
+        }
+
         const { data, error } = await supabase.auth.signUp({
           email,
           password,
-          options: { data: { full_name: name } },
+          options: {
+            data: { full_name: name, username: name },
+            emailRedirectTo,
+          },
         });
         if (error) throw error;
         return { needsConfirmation: data.session === null };
       },
       signOut: async () => {
-        const { error } = await supabase.auth.signOut();
-        if (error) throw error;
+        try {
+          await supabase.auth.signOut();
+        } catch (err) {
+          console.warn('Erro ao chamar signOut no servidor:', err);
+        } finally {
+          setSession(null);
+          queryClient.clear();
+        }
       },
     }),
     [session, loading],

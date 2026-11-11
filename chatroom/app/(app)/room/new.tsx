@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import {
   Alert,
+  Platform,
   Pressable,
   StyleSheet,
   Switch,
@@ -56,7 +57,11 @@ export default function NewRoomScreen() {
         onError: (e) => {
           const msg = friendlyError(e);
           setFormError(msg);
-          Alert.alert('Não foi possível criar a sala', msg);
+          if (Platform.OS === 'web' && typeof window !== 'undefined') {
+            window.alert('Não foi possível criar a sala: ' + msg);
+          } else {
+            Alert.alert('Não foi possível criar a sala', msg);
+          }
         },
       },
     );

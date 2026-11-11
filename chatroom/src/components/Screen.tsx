@@ -13,7 +13,7 @@ interface ScreenProps {
 export function Screen({
   children,
   scroll = false,
-  edges = ['top', 'left', 'right'],
+  edges = ['top', 'left', 'right', 'bottom'],
 }: ScreenProps) {
   return (
     <SafeAreaView style={styles.flex} edges={edges}>

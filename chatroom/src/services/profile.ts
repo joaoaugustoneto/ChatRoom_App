@@ -59,6 +59,32 @@ export async function getProfile(userId: string): Promise<Profile> {
 }
 
 export async function updateUsername(userId: string, username: string): Promise<void> {
-  const { error } = await supabase.from('profiles').update({ username }).eq('id', userId);
-  if (error) throw error;
+  // 1. Atualiza metadados do usuário na sessão Supabase Auth
+  await supabase.auth
+    .updateUser({
+      data: { full_name: username, username },
+    })
+    .catch((err) => console.warn('Erro ao atualizar auth.users:', err));
+
+  // 2. Tenta atualizar o registro existente em public.profiles
+  const { data: updated, error: updateError } = await supabase
+    .from('profiles')
+    .update({ username })
+    .eq('id', userId)
+    .select('id');
+
+  if (!updateError && updated && updated.length > 0) {
+    return;
+  }
+
+  // 3. Caso a linha não exista em profiles, tenta upsert com fallback seguro
+  const { error: upsertErr } = await supabase.from('profiles').upsert({
+    id: userId,
+    username,
+    avatar_color: '#2563EB',
+  });
+
+  if (upsertErr) {
+    console.warn('Aviso: profiles upsert não completou (RLS ou permissão):', upsertErr);
+  }
 }

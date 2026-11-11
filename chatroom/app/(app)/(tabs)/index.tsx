@@ -9,6 +9,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { EmptyState, ErrorState, LoadingView } from '@/components/StateViews';
 import { RoomCard } from '@/components/RoomCard';
 import { useDirectRooms, useMyRoomIds, useRooms } from '@/hooks/useRooms';
@@ -17,6 +18,7 @@ import { friendlyError } from '@/utils/errors';
 
 export default function RoomsScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const [activeTab, setActiveTab] = useState<'public' | 'direct'>('public');
 
   const {
@@ -51,11 +53,11 @@ export default function RoomsScreen() {
   if (isError) return <ErrorState message={friendlyError(error)} onRetry={refetch} />;
 
   return (
-    <View style={styles.screen}>
+    <View style={[styles.screen, { paddingTop: Math.max(insets.top, spacing.md) }]}>
       <FlatList
         data={currentRooms}
         keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.content}
+        contentContainerStyle={[styles.content, { paddingBottom: 100 + insets.bottom }]}
         ListHeaderComponent={
           <View style={styles.header}>
             <Text style={styles.title}>ChatRoom</Text>
@@ -141,7 +143,7 @@ export default function RoomsScreen() {
           accessibilityRole="button"
           accessibilityLabel="Nova sala"
           onPress={() => router.push('/room/new')}
-          style={styles.fab}
+          style={[styles.fab, { bottom: spacing.lg + insets.bottom }]}
         >
           <Ionicons name="add" size={28} color={colors.onPrimary} />
         </Pressable>

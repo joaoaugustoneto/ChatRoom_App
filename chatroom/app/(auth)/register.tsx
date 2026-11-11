@@ -2,7 +2,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { Link, useRouter } from 'expo-router';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
-import { Alert, StyleSheet, Text } from 'react-native';
+import { Alert, Platform, StyleSheet, Text } from 'react-native';
 import { Button } from '@/components/Button';
 import { FormInput } from '@/components/FormInput';
 import { Screen } from '@/components/Screen';
@@ -32,11 +32,18 @@ export default function RegisterScreen() {
       );
 
       if (needsConfirmation) {
-        Alert.alert(
-          'Confirme seu e-mail',
-          'Enviamos um link de confirmação. Verifique sua caixa de entrada e depois entre.',
-          [{ text: 'OK', onPress: () => router.replace('/login') }],
-        );
+        if (Platform.OS === 'web' && typeof window !== 'undefined') {
+          window.alert(
+            'Confirme seu e-mail: Enviamos um link de confirmação. Verifique sua caixa de entrada e depois entre.',
+          );
+          router.replace('/login');
+        } else {
+          Alert.alert(
+            'Confirme seu e-mail',
+            'Enviamos um link de confirmação. Verifique sua caixa de entrada e depois entre.',
+            [{ text: 'OK', onPress: () => router.replace('/login') }],
+          );
+        }
       }
       // Sem confirmação exigida: a sessão já existe e o guarda de rota redireciona sozinho.
     } catch (error) {

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Alert, StyleSheet, Text, View } from 'react-native';
+import { Alert, Platform, StyleSheet, Text, View } from 'react-native';
 import { Avatar } from '@/components/Avatar';
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
@@ -25,16 +25,34 @@ export default function ProfileScreen() {
   function save() {
     const trimmed = name.trim();
     if (trimmed.length < 2) {
-      Alert.alert('Nome muito curto', 'Use pelo menos 2 caracteres.');
+      if (Platform.OS === 'web' && typeof window !== 'undefined') {
+        window.alert('Nome muito curto. Use pelo menos 2 caracteres.');
+      } else {
+        Alert.alert('Nome muito curto', 'Use pelo menos 2 caracteres.');
+      }
       return;
     }
     updateUsername.mutate(trimmed, {
       onSuccess: () => setEditing(false),
-      onError: (e) => Alert.alert('Não foi possível salvar', friendlyError(e)),
+      onError: (e) => {
+        const msg = friendlyError(e);
+        if (Platform.OS === 'web' && typeof window !== 'undefined') {
+          window.alert('Não foi possível salvar: ' + msg);
+        } else {
+          Alert.alert('Não foi possível salvar', msg);
+        }
+      },
     });
   }
 
   function confirmSignOut() {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      if (window.confirm('Deseja encerrar a sessão?')) {
+        void signOut();
+      }
+      return;
+    }
+
     Alert.alert('Sair', 'Deseja encerrar a sessão?', [
       { text: 'Cancelar', style: 'cancel' },
       {

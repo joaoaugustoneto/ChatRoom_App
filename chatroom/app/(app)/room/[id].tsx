@@ -13,6 +13,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MessageBubble } from '@/components/MessageBubble';
 import { ErrorState, LoadingView } from '@/components/StateViews';
 import { TypingIndicator } from '@/components/TypingIndicator';
@@ -45,6 +46,7 @@ const REACTION_EMOJIS = ['❤️', '👍', '😂', '🔥', '🎉'];
 
 export default function RoomScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user } = useAuth();
   const room = useRoom(id);
@@ -109,7 +111,14 @@ export default function RoomScreen() {
       editMessage.mutate(
         { id: editingMessageId, newBody: body },
         {
-          onError: (e) => Alert.alert('Não foi possível editar', friendlyError(e)),
+          onError: (e) => {
+            const msg = friendlyError(e);
+            if (Platform.OS === 'web' && typeof window !== 'undefined') {
+              window.alert('Não foi possível editar: ' + msg);
+            } else {
+              Alert.alert('Não foi possível editar', msg);
+            }
+          },
         },
       );
       setEditingMessageId(null);
@@ -117,13 +126,31 @@ export default function RoomScreen() {
       sendMessage.mutate(
         { body: body || '📷 Imagem', imageUrl: imgToSend || undefined },
         {
-          onError: (e) => Alert.alert('Não foi possível enviar', friendlyError(e)),
+          onError: (e) => {
+            const msg = friendlyError(e);
+            if (Platform.OS === 'web' && typeof window !== 'undefined') {
+              window.alert('Não foi possível enviar: ' + msg);
+            } else {
+              Alert.alert('Não foi possível enviar', msg);
+            }
+          },
         },
       );
     }
   }
 
   function handleAttachImage() {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      const url = window.prompt(
+        'Cole a URL de uma imagem para anexar (ou confirme para usar exemplo):',
+        'https://images.unsplash.com/photo-1579546929518-9e396f3cc809?w=500',
+      );
+      if (url) {
+        setAttachedImage(url);
+      }
+      return;
+    }
+
     Alert.alert('Anexar Imagem', 'Selecione uma imagem para enviar:', [
       { text: 'Cancelar', style: 'cancel' },
       {
@@ -197,6 +224,13 @@ export default function RoomScreen() {
   }
 
   function confirmLeave() {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      if (window.confirm(`Deseja sair de "${room.data!.name}"?`)) {
+        leaveRoom.mutate(id, { onSuccess: () => router.back() });
+      }
+      return;
+    }
+
     Alert.alert('Sair da sala', `Deseja sair de "${room.data!.name}"?`, [
       { text: 'Cancelar', style: 'cancel' },
       {
@@ -246,7 +280,14 @@ export default function RoomScreen() {
             joinRoom.mutate(
               { roomId: id, inviteCode: room.data.isPrivate ? enteredCode : undefined },
               {
-                onError: (e) => Alert.alert('Não foi possível entrar', friendlyError(e)),
+                onError: (e) => {
+                  const msg = friendlyError(e);
+                  if (Platform.OS === 'web' && typeof window !== 'undefined') {
+                    window.alert('Não foi possível entrar: ' + msg);
+                  } else {
+                    Alert.alert('Não foi possível entrar', msg);
+                  }
+                },
               },
             )
           }
@@ -380,7 +421,9 @@ export default function RoomScreen() {
           </Pressable>
         </View>
       ) : null}
-      <View style={styles.composer}>
+      <View
+        style={[styles.composer, { paddingBottom: Math.max(insets.bottom, spacing.md) }]}
+      >
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Anexar imagem"
@@ -401,6 +444,19 @@ export default function RoomScreen() {
           placeholderTextColor={colors.muted}
           style={styles.input}
           multiline
+          onSubmitEditing={handleSend}
+          returnKeyType="send"
+          onKeyPress={(e) => {
+            if (
+              Platform.OS === 'web' &&
+              'key' in e.nativeEvent &&
+              e.nativeEvent.key === 'Enter' &&
+              !('shiftKey' in e.nativeEvent && e.nativeEvent.shiftKey)
+            ) {
+              e.preventDefault();
+              handleSend();
+            }
+          }}
         />
         <Pressable
           accessibilityRole="button"
