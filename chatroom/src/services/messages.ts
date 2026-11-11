@@ -105,6 +105,20 @@ export async function removeReaction(
   if (error) throw error;
 }
 
+export async function searchMessages(roomId: string, query: string): Promise<Message[]> {
+  const clean = query.trim();
+  if (!clean) return [];
+  const { data, error } = await supabase
+    .from('messages')
+    .select(SELECT)
+    .eq('room_id', roomId)
+    .ilike('body', `%${clean}%`)
+    .order('created_at', { ascending: true });
+
+  if (error) throw error;
+  return (data as unknown as MessageRow[]).map(toMessage);
+}
+
 // Busca uma mensagem especifica pelo id (usada quando o Realtime avisa de um
 // INSERT ou UPDATE: o evento vem "cru", sem o join do perfil, então buscamos completa).
 export async function getMessage(id: string): Promise<Message> {

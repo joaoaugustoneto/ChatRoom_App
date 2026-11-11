@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   FlatList,
@@ -36,6 +36,7 @@ import { colors, radius, spacing } from '@/theme';
 import type { Message } from '@/types';
 import { friendlyError } from '@/utils/errors';
 import { shouldGroupWithPrevious } from '@/utils/messages';
+import { filterMessages } from '@/utils/search';
 
 const REACTION_EMOJIS = ['❤️', '👍', '😂', '🔥', '🎉'];
 
@@ -60,12 +61,20 @@ export default function RoomScreen() {
 
   const [text, setText] = useState('');
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchOpen, setSearchOpen] = useState(false);
   const listRef = useRef<FlatList>(null);
 
+  const displayedMessages = useMemo(() => {
+    const list = messages.data ?? [];
+    if (!searchOpen || !searchQuery.trim()) return list;
+    return filterMessages(list, searchQuery);
+  }, [messages.data, searchOpen, searchQuery]);
+
   useEffect(() => {
-    if (messages.data?.length)
+    if (displayedMessages.length && !searchOpen)
       setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 50);
-  }, [messages.data?.length]);
+  }, [displayedMessages.length, searchOpen]);
 
   if (room.isLoading) return <LoadingView />;
   if (room.isError || !room.data)
@@ -188,9 +197,28 @@ export default function RoomScreen() {
         options={{
           title: room.data.name,
           headerRight: () => (
-            <Pressable accessibilityRole="button" onPress={confirmLeave}>
-              <Ionicons name="exit-outline" size={22} color={colors.danger} />
-            </Pressable>
+            <View style={styles.headerRight}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Buscar mensagens"
+                onPress={() => setSearchOpen((prev) => !prev)}
+                style={styles.headerBtn}
+              >
+                <Ionicons
+                  name={searchOpen ? 'search' : 'search-outline'}
+                  size={22}
+                  color={colors.primary}
+                />
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Sair da sala"
+                onPress={confirmLeave}
+                style={styles.headerBtn}
+              >
+                <Ionicons name="exit-outline" size={22} color={colors.danger} />
+              </Pressable>
+            </View>
           ),
         }}
       />
@@ -200,12 +228,36 @@ export default function RoomScreen() {
           {onlineCount} online{members?.length ? ` · ${members.length} na sala` : ''}
         </Text>
       </View>
+
+      {searchOpen ? (
+        <View style={styles.searchBar}>
+          <Ionicons name="search" size={18} color={colors.muted} />
+          <TextInput
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            placeholder="Buscar por texto ou autor..."
+            placeholderTextColor={colors.muted}
+            style={styles.searchInput}
+            autoFocus
+          />
+          {searchQuery ? (
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => setSearchQuery('')}
+              style={styles.clearBtn}
+            >
+              <Ionicons name="close-circle" size={18} color={colors.muted} />
+            </Pressable>
+          ) : null}
+        </View>
+      ) : null}
+
       {messages.isLoading ? (
         <LoadingView />
       ) : (
         <FlatList
           ref={listRef}
-          data={messages.data ?? []}
+          data={displayedMessages}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.list}
           renderItem={({ item, index }) => (
@@ -213,13 +265,15 @@ export default function RoomScreen() {
               message={item}
               mine={item.userId === user?.id}
               currentUserId={user?.id}
-              showSender={!shouldGroupWithPrevious(item, messages.data?.[index - 1])}
+              showSender={!shouldGroupWithPrevious(item, displayedMessages[index - 1])}
               pending={item.id.startsWith('temp-')}
               onLongPress={() => handleMessageOptions(item)}
               onReactionPress={(emoji) => handleReactionSelect(item.id, emoji)}
             />
           )}
-          onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: false })}
+          onContentSizeChange={() => {
+            if (!searchOpen) listRef.current?.scrollToEnd({ animated: false });
+          }}
         />
       )}
       <TypingIndicator usernames={typingUsernames} />
@@ -271,6 +325,14 @@ export default function RoomScreen() {
 
 const styles = StyleSheet.create({
   flex: { flex: 1, backgroundColor: colors.background },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  headerBtn: {
+    padding: 4,
+  },
   onlineBar: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -280,6 +342,28 @@ const styles = StyleSheet.create({
   },
   onlineDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.online },
   onlineText: { fontSize: 12, color: colors.muted },
+  searchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 8,
+    marginHorizontal: spacing.md,
+    marginBottom: spacing.xs,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    gap: spacing.sm,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 14,
+    color: colors.text,
+    padding: 0,
+  },
+  clearBtn: {
+    padding: 2,
+  },
   list: { padding: spacing.md, gap: 2 },
   editingBanner: {
     flexDirection: 'row',

@@ -9,6 +9,7 @@ import {
   getMessage,
   listMessages,
   removeReaction,
+  searchMessages,
   sendMessage,
 } from '@/services/messages';
 import { useMyProfile } from './useMyProfile';
@@ -219,5 +220,13 @@ export function useToggleReaction(roomId: string) {
         old?.map((m) => (m.id === updated.id ? updated : m)),
       );
     },
+  });
+}
+
+export function useSearchMessages(roomId: string | undefined, searchTerm: string) {
+  return useQuery({
+    queryKey: ['messages', 'search', roomId, searchTerm],
+    queryFn: () => searchMessages(roomId as string, searchTerm),
+    enabled: Boolean(roomId && searchTerm.trim().length >= 2),
   });
 }
