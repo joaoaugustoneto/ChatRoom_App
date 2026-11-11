@@ -34,6 +34,7 @@ export default function NewRoomScreen() {
   const [emoji, setEmoji] = useState(EMOJIS[0]);
   const [isPrivate, setIsPrivate] = useState(false);
   const [inviteCode, setInviteCode] = useState('');
+  const [formError, setFormError] = useState<string | null>(null);
 
   const { control, handleSubmit, formState } = useForm<FormData>({
     resolver: zodResolver(schema),
@@ -41,6 +42,7 @@ export default function NewRoomScreen() {
   });
 
   const submit = handleSubmit((values) => {
+    setFormError(null);
     createRoom.mutate(
       {
         name: values.name,
@@ -51,7 +53,11 @@ export default function NewRoomScreen() {
       },
       {
         onSuccess: (id) => router.replace(`/room/${id}`),
-        onError: (e) => Alert.alert('Não foi possível criar a sala', friendlyError(e)),
+        onError: (e) => {
+          const msg = friendlyError(e);
+          setFormError(msg);
+          Alert.alert('Não foi possível criar a sala', msg);
+        },
       },
     );
   });
@@ -113,6 +119,8 @@ export default function NewRoomScreen() {
         </View>
       ) : null}
 
+      {formError ? <Text style={styles.errorText}>{formError}</Text> : null}
+
       <Button
         title="Criar sala"
         onPress={submit}
@@ -172,5 +180,12 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: colors.text,
     backgroundColor: colors.surface,
+  },
+  errorText: {
+    color: colors.danger,
+    fontSize: 14,
+    marginBottom: spacing.sm,
+    textAlign: 'center',
+    fontWeight: '500',
   },
 });

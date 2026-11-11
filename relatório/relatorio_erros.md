@@ -149,7 +149,59 @@ Este documento detalha todos os erros identificados durante a análise e impleme
 
 ---
 
-## 8. Resumo Geral de Validações de Qualidade e Segurança
+## 8. Falha na Criação de Salas (`POST /rooms 409 Conflict`) decorrente de Perfil Inexistente (`GET /profiles 406 Not Acceptable`)
+
+- **Etapa Relacionada:** Etapa 11 (Criação de Salas) / Produção Supabase
+- **Arquivos Afetados:** `chatroom/src/services/profile.ts`, `chatroom/src/services/rooms.ts`, `chatroom/app/(app)/room/new.tsx`, `chatroom/supabase/schema.sql`
+- **Sintomas / Mensagens de Erro no Console DevTools:**
+  ```text
+  GET https://...supabase.co/rest/v1/profiles?select=id,username,avatar_color... 406 (Not Acceptable)
+  POST https://...supabase.co/rest/v1/rooms?select=id 409 (Conflict)
+  ```
+- **Causa Raiz:**
+  1. A tabela `public.rooms` possui a restrição de chave estrangeira: `created_by uuid not null references public.profiles (id)`.
+  2. Caso o usuário logado tenha sido registrado antes da execução do gatilho `on_auth_user_created`, ou o gatilho não tenha sido disparado para contas pré-existentes, o usuário autenticado não possui registro correspondente na tabela `public.profiles`.
+  3. A consulta `getProfile(userId)` utilizava `.single()`, que resulta em erro HTTP 406 (código PostgREST `PGRST116`) ao receber 0 linhas.
+  4. Subsequentemente, o comando `insert into rooms (...)` viola a chave estrangeira `rooms_created_by_fkey`, resultando no erro HTTP 409 (Conflict). No ambiente Web, como `Alert.alert` não renderiza modal nativo, a falha ficava silenciosa para o usuário na interface.
+- **Solução Aplicada:**
+  1. **Auto-recuperação (Self-healing) no Serviço de Perfil (`src/services/profile.ts`):** Substituído `.single()` por `.maybeSingle()`. Se o perfil não for encontrado, o serviço recupera os metadados do usuário via `supabase.auth.getUser()` e insere/restaura automaticamente a linha em `public.profiles`.
+  2. **Garantia de Pré-requisito na Criação de Salas (`src/services/rooms.ts`):** Invocação prévia de `await getProfile(userId)` antes de despachar o insert de `rooms`.
+  3. **Permissão RLS e Migração Idempotente (`supabase/schema.sql`):** Adicionada política `Perfis: inserir próprio perfil` (`for insert to authenticated with check (auth.uid() = id)`) e script de inserção para todos os usuários órfãos em `auth.users`.
+  4. **Feedback Visual Explícito na Interface (`room/new.tsx`):** Adicionado estado `formError` com renderização de texto de erro em vermelho logo acima do botão "Criar sala", garantindo que mensagens de erro sejam imediatamente visíveis tanto em dispositivos móveis quanto no navegador Web.
+
+---
+
+## 9. Comportamento de Edição e Caret no Navegador Web (Caret Browsing e Seleção de UI)
+
+- **Etapa Relacionada:** Ambiente Web / React Native Web
+- **Arquivo Afetado:** `chatroom/app/_layout.tsx`
+- **Sintoma:** Ao clicar em textos informativos da interface (como o subtítulo "Converse em tempo real, em salas" na tela de login), um cursor vertical de digitação (`|`) aparecia como se o texto estivesse em modo de edição.
+- **Causa Raiz:**
+  1. No ambiente Web, componentes `<Text>` do React Native Web são renderizados como elementos `<div>` HTML com seleção padrão.
+  2. Em navegadores Chromium (Chrome / Edge), pressionar acidentalmente a tecla **F7** ativa a funcionalidade de acessibilidade **Caret Browsing** ("Navegação por cursor"), que insere um cursor piscante em qualquer elemento de texto que o usuário clica.
+- **Solução Aplicada:**
+  1. Injetado estilo global na inicialização do aplicativo web em `chatroom/app/_layout.tsx`:
+     ```css
+     * {
+       -webkit-user-select: none;
+       user-select: none;
+       -webkit-touch-callout: none;
+     }
+     input, textarea, [contenteditable="true"] {
+       -webkit-user-select: text !important;
+       user-select: text !important;
+       cursor: text !important;
+     }
+     a, button, [role="button"] {
+       cursor: pointer !important;
+     }
+     ```
+     Isso padroniza a interface com o comportamento nativo de aplicativo móvel, eliminando seleção indesejada e cursores em textos de UI.
+  2. Orientação para desativar a tecla de atalho **F7** do navegador caso o usuário tenha ativado o Caret Browsing nativo do Chrome/Edge.
+
+---
+
+## 10. Resumo Geral de Validações de Qualidade e Segurança
 
 Ao término de todas as etapas (1 a 14) do guia principal e de todos os 10 desafios do Apêndice C:
 

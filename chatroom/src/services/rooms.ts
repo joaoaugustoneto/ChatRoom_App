@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import { getProfile } from '@/services/profile';
 import type { Room } from '@/types';
 
 interface RoomRow {
@@ -88,6 +89,9 @@ export async function createRoom(
   isPrivate = false,
   inviteCode?: string,
 ): Promise<string> {
+  // Garante a existência do perfil para evitar violação da foreign key rooms_created_by_fkey
+  await getProfile(userId);
+
   const generatedCode = isPrivate
     ? inviteCode?.trim().toUpperCase() ||
       Math.random().toString(36).slice(2, 8).toUpperCase()

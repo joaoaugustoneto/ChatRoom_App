@@ -19,7 +19,11 @@ create policy "Perfis: atualizar o próprio"
   on public.profiles for update to authenticated
   using (auth.uid() = id) with check (auth.uid() = id);
 
-grant select, update on public.profiles to authenticated;
+create policy "Perfis: inserir próprio perfil"
+  on public.profiles for insert to authenticated
+  with check (auth.uid() = id);
+
+grant select, insert, update on public.profiles to authenticated;
 
 -- Gatilho: toda vez que alguém se cadastra (uma linha nova em auth.users),
 -- criamos o perfil correspondente sozinhos. "security definer" é necessário
@@ -36,11 +40,14 @@ begin
     new.id,
     coalesce(
       nullif(trim(new.raw_user_meta_data ->> 'full_name'), ''),
-      split_part(new.email, '@', 1)
+      nullif(trim(new.raw_user_meta_data ->> 'username'), ''),
+      split_part(new.email, '@', 1),
+      'Usuário'
     ),
     (array['#2563EB', '#7C3AED', '#DB2777', '#059669', '#D97706', '#DC2626', '#0891B2'])
       [1 + floor(random() * 7)]
-  );
+  )
+  on conflict (id) do nothing;
   return new;
 end;
 $$;
@@ -49,6 +56,21 @@ drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
   after insert on auth.users
   for each row execute function public.handle_new_user();
+
+-- Garante que todo usuário já existente em auth.users possua um registro em public.profiles
+insert into public.profiles (id, username, avatar_color)
+select
+  id,
+  coalesce(
+    nullif(trim(raw_user_meta_data ->> 'full_name'), ''),
+    nullif(trim(raw_user_meta_data ->> 'username'), ''),
+    split_part(email, '@', 1),
+    'Usuário'
+  ),
+  '#2563EB'
+from auth.users
+where id not in (select id from public.profiles)
+on conflict (id) do nothing;
 
 -- 2) Salas ----------------------------------------------------------------
 create table public.rooms (
