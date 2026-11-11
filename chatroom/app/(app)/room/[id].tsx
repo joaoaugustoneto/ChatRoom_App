@@ -27,6 +27,7 @@ import {
 } from '@/hooks/useMessages';
 import { useRoomPresence } from '@/hooks/usePresence';
 import {
+  useGetOrCreateDirectRoom,
   useJoinRoom,
   useLeaveRoom,
   useMyRoomIds,
@@ -58,6 +59,7 @@ export default function RoomScreen() {
   const markAsRead = useMarkMessagesAsRead(id);
   const joinRoom = useJoinRoom();
   const leaveRoom = useLeaveRoom();
+  const createDirectRoom = useGetOrCreateDirectRoom();
   const online = useRoomPresence(isMember ? id : undefined);
   const { typingUsernames, notifyTyping } = useTypingIndicator(isMember ? id : undefined);
   const { data: members } = useRoomMembers(id);
@@ -176,6 +178,18 @@ export default function RoomScreen() {
         text: 'Apagar',
         style: 'destructive',
         onPress: () => deleteMessage.mutate(message.id),
+      });
+    } else {
+      options.push({
+        text: `Conversar no privado com ${message.username}`,
+        onPress: () => {
+          createDirectRoom.mutate(message.userId, {
+            onSuccess: (dmRoomId) => {
+              router.push(`/room/${dmRoomId}`);
+            },
+            onError: (err) => Alert.alert('Erro', friendlyError(err)),
+          });
+        },
       });
     }
 

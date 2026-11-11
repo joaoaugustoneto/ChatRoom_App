@@ -10,6 +10,7 @@ interface RoomRow {
   created_at: string;
   is_private?: boolean;
   invite_code?: string;
+  is_direct?: boolean;
   room_members: { count: number }[];
 }
 
@@ -23,19 +24,42 @@ function toRoom(row: RoomRow): Room {
     createdAt: row.created_at,
     isPrivate: Boolean(row.is_private),
     inviteCode: row.invite_code,
+    isDirect: Boolean(row.is_direct),
     memberCount: row.room_members?.[0]?.count ?? 0,
   };
 }
 
-// Todas as salas, com a contagem de membros (uma consulta só, sem N+1).
+// Todas as salas públicas/em grupo, com a contagem de membros (uma consulta só, sem N+1).
 export async function listRooms(): Promise<Room[]> {
   const { data, error } = await supabase
     .from('rooms')
     .select('*, room_members (count)')
+    .eq('is_direct', false)
     .order('created_at', { ascending: false });
 
   if (error) throw error;
   return (data as RoomRow[]).map(toRoom);
+}
+
+// Conversas diretas (1 para 1) do usuário
+export async function listDirectRooms(): Promise<Room[]> {
+  const { data, error } = await supabase
+    .from('rooms')
+    .select('*, room_members (count)')
+    .eq('is_direct', true)
+    .order('created_at', { ascending: false });
+
+  if (error) throw error;
+  return (data as RoomRow[]).map(toRoom);
+}
+
+export async function getOrCreateDirectRoom(targetUserId: string): Promise<string> {
+  const { data, error } = await supabase.rpc('get_or_create_direct_room', {
+    p_target_user_id: targetUserId,
+  });
+
+  if (error) throw error;
+  return data as string;
 }
 
 // Os ids das salas em que o usuário logado já está para marcar "Minhas salas".

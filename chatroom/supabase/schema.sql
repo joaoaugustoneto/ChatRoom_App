@@ -58,20 +58,16 @@ create table public.rooms (
   emoji text not null default '💬',
   is_private boolean not null default false,
   invite_code text,
+  is_direct boolean not null default false,
   created_by uuid not null default auth.uid() references public.profiles (id),
   created_at timestamptz not null default now()
 );
 
 alter table public.rooms enable row level security;
 
-create policy "Salas: leitura para quem está logado"
-  on public.rooms for select to authenticated using (true);
-
 create policy "Salas: criar como dono"
   on public.rooms for insert to authenticated
   with check (auth.uid() = created_by);
-
-grant select, insert on public.rooms to authenticated;
 
 -- 3) Participação nas salas ------------------------------------------------
 -- Entrar numa sala é um ato explícito: só quem tem uma linha aqui consegue
@@ -106,6 +102,58 @@ $$;
 
 revoke all on function public.is_room_member(uuid) from public;
 grant execute on function public.is_room_member(uuid) to authenticated;
+
+create policy "Salas: leitura para quem está logado"
+  on public.rooms for select to authenticated
+  using (not is_direct or public.is_room_member(id));
+
+grant select, insert on public.rooms to authenticated;
+
+-- Função auxiliar para mensagens diretas (1 para 1)
+create or replace function public.get_or_create_direct_room(p_target_user_id uuid)
+returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_room_id uuid;
+  v_current_user uuid := auth.uid();
+  v_other_name text;
+begin
+  if v_current_user is null then
+    raise exception 'Não autenticado';
+  end if;
+  if p_target_user_id = v_current_user then
+    raise exception 'Não pode criar conversa direta consigo mesmo';
+  end if;
+
+  select r.id into v_room_id
+  from public.rooms r
+  join public.room_members m1 on m1.room_id = r.id and m1.user_id = v_current_user
+  join public.room_members m2 on m2.room_id = r.id and m2.user_id = p_target_user_id
+  where r.is_direct = true
+  limit 1;
+
+  if v_room_id is not null then
+    return v_room_id;
+  end if;
+
+  select username into v_other_name from public.profiles where id = p_target_user_id;
+
+  insert into public.rooms (name, description, emoji, is_direct, created_by)
+  values (coalesce(v_other_name, 'Conversa Privada'), 'Mensagem Direta 1:1', '🔒', true, v_current_user)
+  returning id into v_room_id;
+
+  insert into public.room_members (room_id, user_id) values (v_room_id, v_current_user);
+  insert into public.room_members (room_id, user_id) values (v_room_id, p_target_user_id);
+
+  return v_room_id;
+end;
+$$;
+
+revoke all on function public.get_or_create_direct_room(uuid) from public;
+grant execute on function public.get_or_create_direct_room(uuid) to authenticated;
 
 create policy "Membros: a própria linha e os colegas de sala"
   on public.room_members for select to authenticated

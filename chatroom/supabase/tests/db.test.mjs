@@ -236,6 +236,58 @@ describe('salas e participação', () => {
     assert.equal(room.is_private, true);
     assert.equal(room.invite_code, 'SEGREDO');
   });
+
+  it('mensagens diretas (1 para 1): apenas os 2 participantes enxergam a sala e conversam', async () => {
+    // Alice cria/obtém sala direta com Bob
+    const dmRoomId = (
+      await as(ALICE, () =>
+        one('select get_or_create_direct_room($1) as id', [BOB]),
+      )
+    ).id;
+
+    assert.ok(dmRoomId);
+
+    // Idempotência: chamar novamente com os mesmos participantes retorna a mesma sala
+    const dmRoomId2 = (
+      await as(BOB, () =>
+        one('select get_or_create_direct_room($1) as id', [ALICE]),
+      )
+    ).id;
+    assert.equal(dmRoomId, dmRoomId2);
+
+    // Alice e Bob enxergam a sala na consulta de rooms
+    const aliceRooms = await as(ALICE, () =>
+      rows('select id from rooms where id = $1', [dmRoomId]),
+    );
+    assert.equal(aliceRooms.length, 1);
+
+    const bobRooms = await as(BOB, () =>
+      rows('select id from rooms where id = $1', [dmRoomId]),
+    );
+    assert.equal(bobRooms.length, 1);
+
+    // Carl (terceiro) NÃO consegue ver a sala direta (RLS protege salas diretas)
+    const carlRooms = await as(CARL, () =>
+      rows('select id from rooms where id = $1', [dmRoomId]),
+    );
+    assert.equal(carlRooms.length, 0);
+
+    // Alice e Bob podem trocar mensagens na DM
+    await send(ALICE, dmRoomId, 'Oi Bob, conversa privada!');
+    await send(BOB, dmRoomId, 'Oi Alice, recebido em sigilo!');
+
+    // Carl não consegue ler mensagens da DM
+    const carlMsgs = await as(CARL, () =>
+      rows('select id from messages where room_id = $1', [dmRoomId]),
+    );
+    assert.equal(carlMsgs.length, 0);
+
+    // Nem enviar mensagens na DM
+    await assert.rejects(
+      send(CARL, dmRoomId, 'Quero me intrometer!'),
+      /row-level security/,
+    );
+  });
 });
 
 describe('mensagens', () => {

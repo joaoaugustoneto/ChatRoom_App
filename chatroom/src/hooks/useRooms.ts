@@ -2,9 +2,11 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/context/AuthContext';
 import {
   createRoom,
+  getOrCreateDirectRoom,
   getRoom,
   joinRoom,
   leaveRoom,
+  listDirectRooms,
   listMyRoomIds,
   listRoomMembers,
   listRooms,
@@ -12,6 +14,9 @@ import {
 
 export const useRooms = () =>
   useQuery({ queryKey: ['rooms', 'list'], queryFn: listRooms });
+
+export const useDirectRooms = () =>
+  useQuery({ queryKey: ['rooms', 'direct'], queryFn: listDirectRooms });
 
 export const useMyRoomIds = () =>
   useQuery({ queryKey: ['rooms', 'mine'], queryFn: listMyRoomIds });
@@ -81,6 +86,15 @@ export function useLeaveRoom() {
       if (!user) throw new Error('Faça login para sair da sala.');
       return leaveRoom(roomId, user.id);
     },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['rooms'] }),
+  });
+}
+
+export function useGetOrCreateDirectRoom() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (targetUserId: string) => getOrCreateDirectRoom(targetUserId),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['rooms'] }),
   });
 }
