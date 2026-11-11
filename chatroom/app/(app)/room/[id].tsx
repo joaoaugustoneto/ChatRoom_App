@@ -19,6 +19,7 @@ import { useAuth } from '@/context/AuthContext';
 import {
   useDeleteMessage,
   useEditMessage,
+  useMarkMessagesAsRead,
   useMessages,
   useSendMessage,
   useToggleReaction,
@@ -53,6 +54,7 @@ export default function RoomScreen() {
   const editMessage = useEditMessage(id);
   const deleteMessage = useDeleteMessage(id);
   const toggleReaction = useToggleReaction(id);
+  const markAsRead = useMarkMessagesAsRead(id);
   const joinRoom = useJoinRoom();
   const leaveRoom = useLeaveRoom();
   const online = useRoomPresence(isMember ? id : undefined);
@@ -76,6 +78,17 @@ export default function RoomScreen() {
     if (displayedMessages.length && !searchOpen)
       setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 50);
   }, [displayedMessages.length, searchOpen]);
+
+  useEffect(() => {
+    if (messages.data?.length && user && isMember) {
+      const unreadIds = messages.data
+        .filter((m) => m.userId !== user.id && !m.id.startsWith('temp-'))
+        .map((m) => m.id);
+      if (unreadIds.length > 0) {
+        markAsRead.mutate(unreadIds);
+      }
+    }
+  }, [messages.data?.length, user?.id, isMember]);
 
   if (room.isLoading) return <LoadingView />;
   if (room.isError || !room.data)

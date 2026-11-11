@@ -28,6 +28,7 @@ export interface Message {
   avatarColor: string;
   isEdited?: boolean;
   reactions?: GroupedReaction[];
+  readByCount?: number;
 }
 
 // Mensagem ainda não confirmada pelo servidor (mostrada otimisticamente).

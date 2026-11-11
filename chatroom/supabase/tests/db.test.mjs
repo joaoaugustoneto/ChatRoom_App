@@ -392,3 +392,34 @@ describe('reações (Apêndice C)', () => {
     assert.equal(reactionsAfter.length, 0);
   });
 });
+
+describe('confirmação de leitura (Apêndice C)', () => {
+  it('membro pode marcar mensagem como lida e outros membros leem a confirmação', async () => {
+    const roomId = await createRoom(ALICE);
+    await join(BOB, roomId);
+    const msgId = await send(ALICE, roomId, 'Você viu isso?');
+
+    await as(BOB, () =>
+      db.query('insert into message_reads (message_id, user_id) values ($1, $2)', [
+        msgId,
+        BOB,
+      ]),
+    );
+
+    const reads = await as(ALICE, () =>
+      rows('select user_id from message_reads where message_id = $1', [msgId]),
+    );
+    assert.equal(reads.length, 1);
+    assert.equal(reads[0].user_id, BOB);
+
+    await assert.rejects(
+      as(CARL, () =>
+        db.query('insert into message_reads (message_id, user_id) values ($1, $2)', [
+          msgId,
+          CARL,
+        ]),
+      ),
+      /row-level security/,
+    );
+  });
+});

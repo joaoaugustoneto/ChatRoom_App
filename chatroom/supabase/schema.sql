@@ -195,8 +195,44 @@ create policy "Reações: remover própria reação"
 
 grant select, insert, delete on public.message_reactions to authenticated;
 
--- 6) Tempo real ---------------------------------------------------------
+-- 6) Confirmação de leitura (Apêndice C) -----------------------------------
+create table public.message_reads (
+  message_id uuid not null references public.messages (id) on delete cascade,
+  user_id uuid not null default auth.uid() references public.profiles (id) on delete cascade,
+  read_at timestamptz not null default now(),
+  primary key (message_id, user_id)
+);
+
+create index message_reads_msg_idx on public.message_reads (message_id);
+
+alter table public.message_reads enable row level security;
+
+create policy "Leituras: membros leem"
+  on public.message_reads for select to authenticated
+  using (
+    exists (
+      select 1 from public.messages m
+      where m.id = message_reads.message_id
+      and public.is_room_member(m.room_id)
+    )
+  );
+
+create policy "Leituras: marcar como lido por mim mesmo"
+  on public.message_reads for insert to authenticated
+  with check (
+    user_id = auth.uid()
+    and exists (
+      select 1 from public.messages m
+      where m.id = message_reads.message_id
+      and public.is_room_member(m.room_id)
+    )
+  );
+
+grant select, insert on public.message_reads to authenticated;
+
+-- 7) Tempo real ---------------------------------------------------------
 -- Sem isto, os inserts em "messages" acontecem no banco mas não chegam aos
 -- outros usuários conectados: é este publish que liga a tabela ao Realtime.
 alter publication supabase_realtime add table public.messages;
 alter publication supabase_realtime add table public.message_reactions;
+alter publication supabase_realtime add table public.message_reads;

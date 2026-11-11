@@ -1,3 +1,4 @@
+import { Ionicons } from '@expo/vector-icons';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Avatar } from './Avatar';
 import { colors, radius, spacing } from '@/theme';
@@ -23,6 +24,8 @@ export function MessageBubble({
   onLongPress,
   onReactionPress,
 }: MessageBubbleProps) {
+  const isRead = Boolean(message.readByCount && message.readByCount > 0);
+
   return (
     <View style={[styles.row, mine && styles.rowMine]}>
       {!mine &&
@@ -69,11 +72,21 @@ export function MessageBubble({
           </View>
         ) : null}
 
-        <Text style={[styles.time, mine && styles.timeMine]}>
-          {pending
-            ? 'enviando...'
-            : `${formatMessageTime(message.createdAt)}${message.isEdited ? ' (editado)' : ''}`}
-        </Text>
+        <View style={[styles.timeRow, mine && styles.timeRowMine]}>
+          <Text style={[styles.time, mine && styles.timeMine]}>
+            {pending
+              ? 'enviando...'
+              : `${formatMessageTime(message.createdAt)}${message.isEdited ? ' (editado)' : ''}`}
+          </Text>
+          {mine && !pending ? (
+            <Ionicons
+              name={isRead ? 'checkmark-done' : 'checkmark'}
+              size={13}
+              color={isRead ? '#93C5FD' : colors.onPrimary}
+              style={styles.checkIcon}
+            />
+          ) : null}
+        </View>
       </View>
     </View>
   );
@@ -113,8 +126,20 @@ const styles = StyleSheet.create({
   pending: { opacity: 0.6 },
   body: { fontSize: 15, color: colors.text, lineHeight: 20 },
   bodyMine: { color: colors.onPrimary },
-  time: { fontSize: 10, color: colors.muted, marginTop: 2, marginLeft: 4 },
-  timeMine: { textAlign: 'right', marginRight: 4 },
+  timeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    marginTop: 2,
+    marginLeft: 4,
+  },
+  timeRowMine: {
+    justifyContent: 'flex-end',
+    marginRight: 4,
+  },
+  time: { fontSize: 10, color: colors.muted },
+  timeMine: { textAlign: 'right', color: colors.muted },
+  checkIcon: { opacity: 0.9 },
   reactionsRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',

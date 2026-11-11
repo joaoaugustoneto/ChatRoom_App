@@ -8,6 +8,7 @@ import {
   editMessage,
   getMessage,
   listMessages,
+  markMessagesAsRead,
   removeReaction,
   searchMessages,
   sendMessage,
@@ -100,6 +101,27 @@ export function useMessages(roomId: string | undefined) {
           const messageId =
             (payload.new as { message_id?: string })?.message_id ??
             (payload.old as { message_id?: string })?.message_id;
+          if (messageId) {
+            try {
+              const full = await getMessage(messageId);
+              queryClient.setQueryData<Message[]>(['messages', roomId], (old) =>
+                old?.map((m) => (m.id === messageId ? full : m)),
+              );
+            } catch {
+              // ignore
+            }
+          }
+        },
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'message_reads',
+        },
+        async (payload) => {
+          const messageId = (payload.new as { message_id?: string })?.message_id;
           if (messageId) {
             try {
               const full = await getMessage(messageId);
@@ -219,6 +241,16 @@ export function useToggleReaction(roomId: string) {
       queryClient.setQueryData<Message[]>(['messages', roomId], (old) =>
         old?.map((m) => (m.id === updated.id ? updated : m)),
       );
+    },
+  });
+}
+
+export function useMarkMessagesAsRead(roomId: string) {
+  const { user } = useAuth();
+  return useMutation({
+    mutationFn: async (messageIds: string[]) => {
+      if (!user) return;
+      await markMessagesAsRead(messageIds, user.id);
     },
   });
 }

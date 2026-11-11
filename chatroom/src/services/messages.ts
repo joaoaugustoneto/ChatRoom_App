@@ -11,6 +11,7 @@ interface MessageRow {
   is_edited?: boolean;
   profiles: { username: string; avatar_color: string } | null;
   message_reactions?: { emoji: string; user_id: string }[];
+  message_reads?: { count: number }[];
 }
 
 function toMessage(row: MessageRow): Message {
@@ -29,11 +30,12 @@ function toMessage(row: MessageRow): Message {
     avatarColor: row.profiles?.avatar_color ?? '#2563EB',
     isEdited: Boolean(row.is_edited),
     reactions: groupReactions(rawReactions),
+    readByCount: row.message_reads?.[0]?.count ?? 0,
   };
 }
 
 const SELECT =
-  'id, room_id, user_id, body, created_at, is_edited, profiles(username, avatar_color), message_reactions(emoji, user_id)';
+  'id, room_id, user_id, body, created_at, is_edited, profiles(username, avatar_color), message_reactions(emoji, user_id), message_reads(count)';
 
 // As últimas mensagens da sala, da mais antiga para a mais nova (pronto para
 // a lista). `limit` evita carregar um histórico gigante de uma vez.
@@ -103,6 +105,15 @@ export async function removeReaction(
     .eq('emoji', emoji);
 
   if (error) throw error;
+}
+
+export async function markMessagesAsRead(
+  messageIds: string[],
+  userId: string,
+): Promise<void> {
+  if (messageIds.length === 0) return;
+  const rows = messageIds.map((id) => ({ message_id: id, user_id: userId }));
+  await supabase.from('message_reads').insert(rows).select();
 }
 
 export async function searchMessages(roomId: string, query: string): Promise<Message[]> {
