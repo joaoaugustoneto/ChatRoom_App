@@ -240,18 +240,14 @@ describe('salas e participação', () => {
   it('mensagens diretas (1 para 1): apenas os 2 participantes enxergam a sala e conversam', async () => {
     // Alice cria/obtém sala direta com Bob
     const dmRoomId = (
-      await as(ALICE, () =>
-        one('select get_or_create_direct_room($1) as id', [BOB]),
-      )
+      await as(ALICE, () => one('select get_or_create_direct_room($1) as id', [BOB]))
     ).id;
 
     assert.ok(dmRoomId);
 
     // Idempotência: chamar novamente com os mesmos participantes retorna a mesma sala
     const dmRoomId2 = (
-      await as(BOB, () =>
-        one('select get_or_create_direct_room($1) as id', [ALICE]),
-      )
+      await as(BOB, () => one('select get_or_create_direct_room($1) as id', [ALICE]))
     ).id;
     assert.equal(dmRoomId, dmRoomId2);
 
@@ -500,10 +496,10 @@ describe('notificações push (Apêndice C)', () => {
   it('usuário registra, atualiza e deleta seu próprio token de push com proteção RLS', async () => {
     // Alice cadastra seu token
     await as(ALICE, () =>
-      db.query(
-        'insert into user_push_tokens (user_id, push_token) values ($1, $2)',
-        [ALICE, 'ExponentPushToken[alice-token-123]'],
-      ),
+      db.query('insert into user_push_tokens (user_id, push_token) values ($1, $2)', [
+        ALICE,
+        'ExponentPushToken[alice-token-123]',
+      ]),
     );
 
     const aliceToken = await as(ALICE, () =>

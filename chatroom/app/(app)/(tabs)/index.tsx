@@ -68,7 +68,10 @@ export default function RoomsScreen() {
             <View style={styles.tabContainer}>
               <Pressable
                 onPress={() => setActiveTab('public')}
-                style={[styles.tabButton, activeTab === 'public' && styles.tabButtonActive]}
+                style={[
+                  styles.tabButton,
+                  activeTab === 'public' && styles.tabButtonActive,
+                ]}
               >
                 <Ionicons
                   name="people"
@@ -84,7 +87,10 @@ export default function RoomsScreen() {
 
               <Pressable
                 onPress={() => setActiveTab('direct')}
-                style={[styles.tabButton, activeTab === 'direct' && styles.tabButtonActive]}
+                style={[
+                  styles.tabButton,
+                  activeTab === 'direct' && styles.tabButtonActive,
+                ]}
               >
                 <Ionicons
                   name="chatbubble-ellipses"

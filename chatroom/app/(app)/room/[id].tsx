@@ -407,7 +407,10 @@ export default function RoomScreen() {
           accessibilityLabel={editingMessageId ? 'Salvar edição' : 'Enviar'}
           onPress={handleSend}
           disabled={!text.trim() && !attachedImage}
-          style={[styles.sendButton, !text.trim() && !attachedImage && styles.sendDisabled]}
+          style={[
+            styles.sendButton,
+            !text.trim() && !attachedImage && styles.sendDisabled,
+          ]}
         >
           <Ionicons
             name={editingMessageId ? 'checkmark' : 'send'}

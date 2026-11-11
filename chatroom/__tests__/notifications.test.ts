@@ -1,7 +1,4 @@
-import {
-  buildPushNotifications,
-  RecipientToken,
-} from '@/utils/notifications';
+import { buildPushNotifications, RecipientToken } from '@/utils/notifications';
 
 describe('buildPushNotifications', () => {
   it('filtra o próprio remetente e monta o payload da notificação', () => {

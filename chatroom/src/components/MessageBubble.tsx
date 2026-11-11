@@ -71,10 +71,7 @@ export function MessageBubble({
                 >
                   <Text style={styles.reactionEmoji}>{r.emoji}</Text>
                   <Text
-                    style={[
-                      styles.reactionCount,
-                      reacted && styles.reactionCountActive,
-                    ]}
+                    style={[styles.reactionCount, reacted && styles.reactionCountActive]}
                   >
                     {r.count}
                   </Text>

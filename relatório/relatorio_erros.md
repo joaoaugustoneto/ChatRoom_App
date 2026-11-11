@@ -91,20 +91,94 @@ Este documento detalha todos os erros identificados durante a análise e impleme
 
 ---
 
-## 5. Resumo das Validações de Qualidade da Etapa 14
+## 5. Chamada Síncrona do `render` na v14 da React Native Testing Library com React 19
 
-Conforme solicitado na Etapa 14 do guia de construção:
+- **Etapa Relacionada:** Desafio 9 do Apêndice C (Testes de Componentes com RNTL)
+- **Arquivo Afetado:** `chatroom/__tests__/components.test.tsx`
+- **Sintoma / Mensagem de Erro:**
+  ```text
+  TypeError: getByText is not a function / The `render` function has not been called or returned a Promise.
+  ```
+- **Causa Raiz:** A partir da versão 14 da `@testing-library/react-native` em conjunto com o React 19 / React Native 0.88, a função `render()` passou a ser assíncrona por encapsular `React.act()` de forma concorrente. Executar `render(<Button ... />)` de forma síncrona sem `await` impedia a resolução das consultas do `screen`.
+- **Solução Aplicada:**
+  Todas as funções de teste de componentes foram refatoradas para funções assíncronas utilizando `await render(...)` e consultas diretas no objeto `screen` (`screen.getByText`, `screen.getByPlaceholderText`, `screen.getByTestId`):
+  ```tsx
+  it('renderiza o título e executa onPress', async () => {
+    const onPress = jest.fn();
+    await render(<Button title="Entrar" onPress={onPress} />);
+    fireEvent.press(screen.getByText('Entrar'));
+    expect(onPress).toHaveBeenCalledTimes(1);
+  });
+  ```
+  Resultando na aprovação total dos testes com feedback instantâneo.
 
-1. **Verificações Automáticas:**
-   - `pnpm run typecheck`: Executado com sucesso, 0 erros de TypeScript detectados.
-   - `pnpm test:app`: 3 suítes de teste Jest executadas (`messages.test.ts`, `avatar.test.ts`, `typing.test.ts`), totalizando **20 testes unitários passando**.
-   - `pnpm run test:db`: 3 suítes de teste PGlite (`perfis`, `salas e participação`, `mensagens`), totalizando **12 testes de banco de dados passando**.
-   - `pnpm test`: Orquestração completa com **32 testes automatizados aprovados (20 app + 12 banco)** com 0 falhas.
-   - `pnpm run format`: Padronização de todo o código fonte via Prettier conforme `.prettierrc`.
+---
 
-2. **Segurança e RLS no Banco de Dados:**
-   - **Tabela `profiles`**: Leitura permitida para qualquer usuário autenticado (`select to authenticated using (true)`). Atualização restrita ao dono da linha (`update to authenticated using (auth.uid() = id)`).
-   - **Tabela `rooms`**: Leitura aberta para usuários autenticados (`select to authenticated using (true)`). Criação restrita com verificação de dono (`insert to authenticated with check (auth.uid() = created_by)`).
-   - **Tabela `room_members`**: Previne recursão infinita delegando a checagem à função `security definer` `public.is_room_member(room_id)`. Leitura permitida para o próprio usuário e para colegas de sala. Inserção restrita a si próprio (`user_id = auth.uid()`). Exclusão restrita à própria linha.
-   - **Tabela `messages`**: Leitura e inserção restritas aos membros ativos da sala (`is_room_member(room_id)`). Exclusão permitida apenas ao autor da mensagem (`user_id = auth.uid()`).
-   - **Replication**: Publicação Realtime habilitada em `public.messages`.
+## 6. Conflito de Tipagem entre Supabase Edge Functions (Deno Runtime) e TypeScript do Expo
+
+- **Etapa Relacionada:** Desafio 6 do Apêndice C (Notificações Push com Edge Function)
+- **Arquivo Afetado:** `chatroom/tsconfig.json` e `chatroom/supabase/functions/notify-room-members/index.ts`
+- **Sintoma / Mensagem de Erro:**
+  ```text
+  supabase/functions/notify-room-members/index.ts: error TS2307: Cannot find module 'jsr:@supabase/supabase-js@2'.
+  supabase/functions/notify-room-members/index.ts: error TS2304: Cannot find name 'Deno'.
+  ```
+- **Causa Raiz:** O TypeScript do projeto React Native (Expo) possui configuração padrão `"include": ["**/*.ts", "**/*.tsx"]`. Isso fazia com que o `tsc --noEmit` do app tentasse compilar a Edge Function, que foi projetada especificamente para o runtime Deno do Supabase (onde `Deno` e `jsr:` são nativos).
+- **Solução Aplicada:**
+  Adicionada a seção `"exclude"` no `chatroom/tsconfig.json`:
+  ```json
+  "exclude": [
+    "supabase/functions"
+  ]
+  ```
+  Com isso, o compilador do aplicativo foca nos arquivos de runtime mobile e web, mantendo as Edge Functions com sua infraestrutura Deno intacta.
+
+---
+
+## 7. Propriedade de Estilo Inexistente `colors.card`
+
+- **Etapa Relacionada:** Desafio 2 do Apêndice C (Interface de Mensagens Diretas e Abas)
+- **Arquivo Afetado:** `chatroom/app/(app)/(tabs)/index.tsx`
+- **Sintoma / Mensagem de Erro:**
+  ```text
+  app/(app)/(tabs)/index.tsx: error TS2339: Property 'card' does not exist on type '{ primary: ...; surface: string; ... }'
+  ```
+- **Causa Raiz:** Ao estilizar a barra de alternância entre "Salas Públicas" e "Mensagens Diretas", foi referenciada a propriedade `colors.card`, enquanto a paleta central do projeto em `src/theme/index.ts` padroniza o fundo de cartões e superfícies como `colors.surface` (`#FFFFFF`).
+- **Solução Aplicada:**
+  Substituído `colors.card` por `colors.surface` e aplicado `#EEF2F6` no fundo do container das abas para contraste visual otimizado.
+
+---
+
+## 8. Resumo Geral de Validações de Qualidade e Segurança
+
+Ao término de todas as etapas (1 a 14) do guia principal e de todos os 10 desafios do Apêndice C:
+
+1. **Testes Automatizados Totais: 57 testes passando (100% de sucesso)**
+   - **38 testes de aplicativo (Jest / RNTL):**
+     - `__tests__/messages.test.ts` (Agrupamento cronológico e de autor)
+     - `__tests__/avatar.test.ts` (Geração de iniciais de avatar)
+     - `__tests__/typing.test.ts` (Texto descritivo de digitação em tempo real)
+     - `__tests__/reactions.test.ts` (Agrupamento e contagem de reações por emoji)
+     - `__tests__/search.test.ts` (Filtro e busca textual de mensagens)
+     - `__tests__/reads.test.ts` (Status de entrega e leitura com visto por)
+     - `__tests__/components.test.tsx` (Renderização de `Button`, `Avatar`, `TypingIndicator`, `RoomCard`)
+     - `__tests__/notifications.test.ts` (Cálculo de destinatários e montagem de push payload)
+   - **19 testes de banco de dados (PGlite / Node test runner):**
+     - Criação automática de perfis por trigger e controle de edição
+     - Criação de salas, ingresso e impedimento de personificação
+     - Visibilidade de membros e saída de salas
+     - Salas privadas protegidas por senha/código de convite
+     - Mensagens diretas (1 para 1) com isolamento estrito via RLS
+     - Validação de mensagens vazias e limites de caracteres
+     - Exclusão permitida apenas ao autor da mensagem
+     - Edição de mensagens restrita ao autor com flag `is_edited`
+     - Envio e leitura de mensagens com imagem anexada
+     - Inclusão e remoção de reações com emoji
+     - Confirmação de leitura e vistos por mensagem
+     - Registro, atualização, exclusão e proteção RLS de tokens push
+
+2. **Tipagem Estrita (TypeScript):**
+   - `pnpm run typecheck` executado sem nenhum erro (`0 errors`).
+
+3. **Formatação de Código:**
+   - Todo o código formatado via Prettier de acordo com `.prettierrc`.
