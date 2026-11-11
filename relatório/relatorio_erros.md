@@ -66,3 +66,25 @@ Este documento detalha todos os erros identificados durante a análise e impleme
   Arquivos removidos do versionamento com `git rm chatroom/App.tsx chatroom/index.ts`, garantindo que o entrypoint seja unicamente gerenciado pelo Expo Router através de `chatroom/app/`.
 
 ---
+
+## 4. Tipagem Incompatível de `onRefresh` no `RefreshControl` com `refetch` do TanStack Query
+
+- **Etapa Relacionada:** Etapa 11 (Código 46)
+- **Arquivo Afetado:** `chatroom/app/(app)/(tabs)/index.tsx`
+- **Sintoma / Mensagem de Erro:**
+  ```text
+  app/(app)/(tabs)/index.tsx(58,13): error TS2769: No overload matches this call.
+    Overload 1 of 2, '(props: RefreshControlProps): RefreshControl', gave the following error.
+      Type '(options?: RefetchOptions | undefined) => Promise<QueryObserverResult<Room[], Error>>' is not assignable to type '() => void | Promise<void>'.
+  ```
+- **Causa Raiz:** A função `refetch` do hook retornado pelo TanStack Query devolve uma `Promise<QueryObserverResult<...>>`. Já a propriedade `onRefresh` de `RefreshControl` (React Native) exige assinatura compatível com `() => void | Promise<void>`.
+- **Solução Aplicada:**
+  Ajustada a chamada da propriedade para encapsular a execução em void:
+  ```tsx
+  <RefreshControl
+    refreshing={isRefetching}
+    onRefresh={() => void refetch()}
+    tintColor={colors.primary}
+  />
+  ```
+  Permitindo compilação estrita sem erros de tipo.
