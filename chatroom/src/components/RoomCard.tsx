@@ -31,6 +31,14 @@ export function RoomCard({ room, isMember, onPress }: RoomCardProps) {
         <View style={styles.metaRow}>
           <Ionicons name="people" size={13} color={colors.muted} />
           <Text style={styles.meta}>{room.memberCount ?? 0}</Text>
+          {room.isPrivate ? (
+            <Ionicons
+              name="lock-closed"
+              size={12}
+              color={colors.muted}
+              style={{ marginLeft: 4 }}
+            />
+          ) : null}
           {isMember ? <Text style={styles.memberBadge}>Você participa</Text> : null}
         </View>
       </View>

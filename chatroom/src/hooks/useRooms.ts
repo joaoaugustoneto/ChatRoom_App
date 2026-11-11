@@ -41,13 +41,17 @@ export function useCreateRoom() {
       name,
       description,
       emoji,
+      isPrivate,
+      inviteCode,
     }: {
       name: string;
       description: string;
       emoji: string;
+      isPrivate?: boolean;
+      inviteCode?: string;
     }) => {
       if (!user) throw new Error('Faça login para criar uma sala.');
-      return createRoom(name, description, emoji, user.id);
+      return createRoom(name, description, emoji, user.id, isPrivate, inviteCode);
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['rooms'] }),
   });
@@ -58,9 +62,11 @@ export function useJoinRoom() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (roomId: string) => {
+    mutationFn: (args: string | { roomId: string; inviteCode?: string }) => {
       if (!user) throw new Error('Faça login para entrar na sala.');
-      return joinRoom(roomId, user.id);
+      const roomId = typeof args === 'string' ? args : args.roomId;
+      const inviteCode = typeof args === 'string' ? undefined : args.inviteCode;
+      return joinRoom(roomId, user.id, inviteCode);
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['rooms'] }),
   });

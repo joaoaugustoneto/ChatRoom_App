@@ -216,6 +216,26 @@ describe('salas e participação', () => {
       1,
     );
   });
+
+  it('cria sala privada com código de convite', async () => {
+    const roomId = await as(ALICE, async () => {
+      const row = await one(
+        'insert into rooms (name, is_private, invite_code, created_by) values ($1, $2, $3, $4) returning id',
+        ['Sala VIP', true, 'SEGREDO', ALICE],
+      );
+      await db.query('insert into room_members (room_id, user_id) values ($1, $2)', [
+        row.id,
+        ALICE,
+      ]);
+      return row.id;
+    });
+
+    const room = await one('select is_private, invite_code from rooms where id = $1', [
+      roomId,
+    ]);
+    assert.equal(room.is_private, true);
+    assert.equal(room.invite_code, 'SEGREDO');
+  });
 });
 
 describe('mensagens', () => {

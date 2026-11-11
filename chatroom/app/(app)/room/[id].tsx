@@ -63,6 +63,7 @@ export default function RoomScreen() {
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
+  const [enteredCode, setEnteredCode] = useState('');
   const listRef = useRef<FlatList>(null);
 
   const displayedMessages = useMemo(() => {
@@ -168,13 +169,39 @@ export default function RoomScreen() {
         {room.data.description ? (
           <Text style={styles.joinDescription}>{room.data.description}</Text>
         ) : null}
-        <Text style={styles.joinCount}>{room.data.memberCount ?? 0} participantes</Text>
+        <View style={styles.joinMetaRow}>
+          <Text style={styles.joinCount}>{room.data.memberCount ?? 0} participantes</Text>
+          {room.data.isPrivate ? (
+            <View style={styles.privateBadge}>
+              <Ionicons name="lock-closed" size={13} color={colors.primary} />
+              <Text style={styles.privateBadgeText}>Sala Privada</Text>
+            </View>
+          ) : null}
+        </View>
+
+        {room.data.isPrivate ? (
+          <View style={styles.inviteInputBox}>
+            <Text style={styles.inviteLabel}>Código de Convite:</Text>
+            <TextInput
+              value={enteredCode}
+              onChangeText={setEnteredCode}
+              placeholder="Digite o código"
+              placeholderTextColor={colors.muted}
+              autoCapitalize="characters"
+              style={styles.inviteInput}
+            />
+          </View>
+        ) : null}
+
         <Pressable
           accessibilityRole="button"
           onPress={() =>
-            joinRoom.mutate(id, {
-              onError: (e) => Alert.alert('Não foi possível entrar', friendlyError(e)),
-            })
+            joinRoom.mutate(
+              { roomId: id, inviteCode: room.data.isPrivate ? enteredCode : undefined },
+              {
+                onError: (e) => Alert.alert('Não foi possível entrar', friendlyError(e)),
+              },
+            )
           }
           style={styles.joinButton}
         >
@@ -227,6 +254,12 @@ export default function RoomScreen() {
         <Text style={styles.onlineText}>
           {onlineCount} online{members?.length ? ` · ${members.length} na sala` : ''}
         </Text>
+        {room.data.isPrivate && room.data.inviteCode ? (
+          <View style={styles.inviteCodeBadge}>
+            <Ionicons name="key-outline" size={12} color={colors.primary} />
+            <Text style={styles.inviteCodeText}>Convite: {room.data.inviteCode}</Text>
+          </View>
+        ) : null}
       </View>
 
       {searchOpen ? (
@@ -342,6 +375,21 @@ const styles = StyleSheet.create({
   },
   onlineDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.online },
   onlineText: { fontSize: 12, color: colors.muted },
+  inviteCodeBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: colors.primarySoft,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: radius.sm,
+    marginLeft: 'auto',
+  },
+  inviteCodeText: {
+    fontSize: 11,
+    color: colors.primary,
+    fontWeight: '700',
+  },
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -421,12 +469,53 @@ const styles = StyleSheet.create({
   joinEmoji: { fontSize: 56 },
   joinTitle: { fontSize: 24, fontWeight: '800', color: colors.text },
   joinDescription: { fontSize: 15, color: colors.muted, textAlign: 'center' },
-  joinCount: { fontSize: 13, color: colors.muted, marginBottom: spacing.md },
+  joinMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: spacing.md,
+  },
+  joinCount: { fontSize: 13, color: colors.muted },
+  privateBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: colors.primarySoft,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: radius.pill,
+  },
+  privateBadgeText: { fontSize: 11, fontWeight: '700', color: colors.primary },
+  inviteInputBox: {
+    width: '100%',
+    marginBottom: spacing.md,
+  },
+  inviteLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.text,
+    marginBottom: 4,
+    textAlign: 'center',
+  },
+  inviteInput: {
+    height: 48,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    backgroundColor: colors.surface,
+    paddingHorizontal: spacing.md,
+    fontSize: 16,
+    color: colors.text,
+    textAlign: 'center',
+    fontWeight: '700',
+  },
   joinButton: {
     backgroundColor: colors.primary,
     borderRadius: radius.pill,
     paddingHorizontal: spacing.xl,
     paddingVertical: 14,
+    minWidth: 200,
+    alignItems: 'center',
   },
   joinButtonText: { color: colors.onPrimary, fontWeight: '700', fontSize: 16 },
 });

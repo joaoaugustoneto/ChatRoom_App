@@ -8,6 +8,8 @@ interface RoomRow {
   emoji: string;
   created_by: string;
   created_at: string;
+  is_private?: boolean;
+  invite_code?: string;
   room_members: { count: number }[];
 }
 
@@ -19,6 +21,8 @@ function toRoom(row: RoomRow): Room {
     emoji: row.emoji,
     createdBy: row.created_by,
     createdAt: row.created_at,
+    isPrivate: Boolean(row.is_private),
+    inviteCode: row.invite_code,
     memberCount: row.room_members?.[0]?.count ?? 0,
   };
 }
@@ -57,10 +61,24 @@ export async function createRoom(
   description: string,
   emoji: string,
   userId: string,
+  isPrivate = false,
+  inviteCode?: string,
 ): Promise<string> {
+  const generatedCode = isPrivate
+    ? inviteCode?.trim().toUpperCase() ||
+      Math.random().toString(36).slice(2, 8).toUpperCase()
+    : null;
+
   const { data, error } = await supabase
     .from('rooms')
-    .insert({ name, description, emoji, created_by: userId })
+    .insert({
+      name,
+      description,
+      emoji,
+      created_by: userId,
+      is_private: isPrivate,
+      invite_code: generatedCode,
+    })
     .select('id')
     .single();
 
@@ -76,7 +94,21 @@ export async function createRoom(
   return room.id;
 }
 
-export async function joinRoom(roomId: string, userId: string): Promise<void> {
+export async function joinRoom(
+  roomId: string,
+  userId: string,
+  inviteCode?: string,
+): Promise<void> {
+  const room = await getRoom(roomId);
+  if (room.isPrivate) {
+    if (
+      !inviteCode ||
+      inviteCode.trim().toUpperCase() !== room.inviteCode?.toUpperCase()
+    ) {
+      throw new Error('Código de convite incorreto para esta sala privada.');
+    }
+  }
+
   const { error } = await supabase
     .from('room_members')
     .insert({ room_id: roomId, user_id: userId });

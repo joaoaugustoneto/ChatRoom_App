@@ -13,6 +13,8 @@ export interface Room {
   emoji: string;
   createdBy: string;
   createdAt: string;
+  isPrivate?: boolean;
+  inviteCode?: string;
   memberCount?: number;
 }
 

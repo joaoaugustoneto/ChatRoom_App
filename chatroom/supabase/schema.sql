@@ -56,6 +56,8 @@ create table public.rooms (
   name text not null check (char_length(trim(name)) between 2 and 60),
   description text not null default '',
   emoji text not null default '💬',
+  is_private boolean not null default false,
+  invite_code text,
   created_by uuid not null default auth.uid() references public.profiles (id),
   created_at timestamptz not null default now()
 );
