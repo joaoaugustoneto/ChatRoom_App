@@ -4,9 +4,9 @@ import { formatTypingIndicator } from '@/utils/typing';
 
 export function TypingIndicator({ usernames }: { usernames: string[] }) {
   const text = formatTypingIndicator(usernames);
-  
+
   if (!text) return null;
-  
+
   return (
     <View style={styles.wrap}>
       <Text style={styles.text}>{text}</Text>

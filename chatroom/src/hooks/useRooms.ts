@@ -35,7 +35,7 @@ export function useRoomMembers(id: string | undefined) {
 export function useCreateRoom() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
-  
+
   return useMutation({
     mutationFn: ({
       name,
@@ -56,7 +56,7 @@ export function useCreateRoom() {
 export function useJoinRoom() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
-  
+
   return useMutation({
     mutationFn: (roomId: string) => {
       if (!user) throw new Error('Faça login para entrar na sala.');
@@ -69,7 +69,7 @@ export function useJoinRoom() {
 export function useLeaveRoom() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
-  
+
   return useMutation({
     mutationFn: (roomId: string) => {
       if (!user) throw new Error('Faça login para sair da sala.');

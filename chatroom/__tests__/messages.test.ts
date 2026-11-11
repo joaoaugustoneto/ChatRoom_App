@@ -70,7 +70,7 @@ describe('groupMessagesByDay', () => {
       msg({ id: '3', createdAt: '2026-09-20T09:00:00Z' }),
     ];
     const sections = groupMessagesByDay(messages, now);
-    
+
     expect(sections.map((s) => s.label)).toEqual(['Ontem', 'Hoje']);
     expect(sections[0].messages).toHaveLength(2);
     expect(sections[1].messages).toHaveLength(1);

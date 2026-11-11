@@ -22,7 +22,7 @@ export function Button({
   style,
 }: ButtonProps) {
   const inactive = disabled || loading;
-  
+
   return (
     <Pressable
       accessibilityRole="button"

@@ -28,14 +28,14 @@ export default function RegisterScreen() {
       const { needsConfirmation } = await signUp(
         values.name,
         values.email,
-        values.password
+        values.password,
       );
-      
+
       if (needsConfirmation) {
         Alert.alert(
           'Confirme seu e-mail',
           'Enviamos um link de confirmação. Verifique sua caixa de entrada e depois entre.',
-          [{ text: 'OK', onPress: () => router.replace('/login') }]
+          [{ text: 'OK', onPress: () => router.replace('/login') }],
         );
       }
       // Sem confirmação exigida: a sessão já existe e o guarda de rota redireciona sozinho.
@@ -78,9 +78,9 @@ export default function RegisterScreen() {
         placeholder="Repita a senha"
         secureTextEntry
       />
-      
+
       {formError ? <Text style={styles.error}>{formError}</Text> : null}
-      
+
       <Button title="Criar conta" onPress={submit} loading={formState.isSubmitting} />
       <Link href="/login" style={styles.link}>
         Já tem conta? <Text style={styles.linkStrong}>Entrar</Text>

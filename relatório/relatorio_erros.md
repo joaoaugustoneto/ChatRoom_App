@@ -88,3 +88,23 @@ Este documento detalha todos os erros identificados durante a análise e impleme
   />
   ```
   Permitindo compilação estrita sem erros de tipo.
+
+---
+
+## 5. Resumo das Validações de Qualidade da Etapa 14
+
+Conforme solicitado na Etapa 14 do guia de construção:
+
+1. **Verificações Automáticas:**
+   - `pnpm run typecheck`: Executado com sucesso, 0 erros de TypeScript detectados.
+   - `pnpm test:app`: 3 suítes de teste Jest executadas (`messages.test.ts`, `avatar.test.ts`, `typing.test.ts`), totalizando **20 testes unitários passando**.
+   - `pnpm run test:db`: 3 suítes de teste PGlite (`perfis`, `salas e participação`, `mensagens`), totalizando **12 testes de banco de dados passando**.
+   - `pnpm test`: Orquestração completa com **32 testes automatizados aprovados (20 app + 12 banco)** com 0 falhas.
+   - `pnpm run format`: Padronização de todo o código fonte via Prettier conforme `.prettierrc`.
+
+2. **Segurança e RLS no Banco de Dados:**
+   - **Tabela `profiles`**: Leitura permitida para qualquer usuário autenticado (`select to authenticated using (true)`). Atualização restrita ao dono da linha (`update to authenticated using (auth.uid() = id)`).
+   - **Tabela `rooms`**: Leitura aberta para usuários autenticados (`select to authenticated using (true)`). Criação restrita com verificação de dono (`insert to authenticated with check (auth.uid() = created_by)`).
+   - **Tabela `room_members`**: Previne recursão infinita delegando a checagem à função `security definer` `public.is_room_member(room_id)`. Leitura permitida para o próprio usuário e para colegas de sala. Inserção restrita a si próprio (`user_id = auth.uid()`). Exclusão restrita à própria linha.
+   - **Tabela `messages`**: Leitura e inserção restritas aos membros ativos da sala (`is_room_member(room_id)`). Exclusão permitida apenas ao autor da mensagem (`user_id = auth.uid()`).
+   - **Replication**: Publicação Realtime habilitada em `public.messages`.

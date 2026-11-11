@@ -16,7 +16,7 @@ import { friendlyError } from '@/utils/errors';
 export default function LoginScreen() {
   const { signIn } = useAuth();
   const [formError, setFormError] = useState<string | null>(null);
-  
+
   const { control, handleSubmit, formState } = useForm<LoginFormData>({
     resolver: zodResolver(loginSchema),
     defaultValues: { email: '', password: '' },

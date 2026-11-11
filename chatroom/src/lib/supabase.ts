@@ -8,7 +8,7 @@ const key = process.env.EXPO_PUBLIC_SUPABASE_KEY;
 
 if (!url || !key) {
   throw new Error(
-    'Variáveis do Supabase ausentes. Confira o .env e reinicie com: npx expo start -c'
+    'Variáveis do Supabase ausentes. Confira o .env e reinicie com: npx expo start -c',
   );
 }
 

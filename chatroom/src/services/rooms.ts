@@ -29,7 +29,7 @@ export async function listRooms(): Promise<Room[]> {
     .from('rooms')
     .select('*, room_members (count)')
     .order('created_at', { ascending: false });
-    
+
   if (error) throw error;
   return (data as RoomRow[]).map(toRoom);
 }
@@ -47,7 +47,7 @@ export async function getRoom(id: string): Promise<Room> {
     .select('*, room_members (count)')
     .eq('id', id)
     .single();
-    
+
   if (error) throw error;
   return toRoom(data as RoomRow);
 }
@@ -63,15 +63,15 @@ export async function createRoom(
     .insert({ name, description, emoji, created_by: userId })
     .select('id')
     .single();
-    
+
   if (error) throw error;
-  
+
   const room = data as { id: string };
-  
+
   const { error: joinError } = await supabase
     .from('room_members')
     .insert({ room_id: room.id, user_id: userId });
-    
+
   if (joinError) throw joinError;
   return room.id;
 }
@@ -108,9 +108,9 @@ export async function listRoomMembers(roomId: string): Promise<RoomMember[]> {
     .from('room_members')
     .select('user_id, profiles(username, avatar_color)')
     .eq('room_id', roomId);
-    
+
   if (error) throw error;
-  
+
   return (data as unknown as MemberRow[]).map((r) => ({
     userId: r.user_id,
     username: r.profiles?.username ?? 'Alguém',

@@ -4,7 +4,7 @@ import { getProfile, updateUsername } from '@/services/profile';
 
 export function useMyProfile() {
   const { user } = useAuth();
-  
+
   return useQuery({
     queryKey: ['profile', user?.id],
     queryFn: () => getProfile(user!.id),
@@ -15,7 +15,7 @@ export function useMyProfile() {
 export function useUpdateUsername() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
-  
+
   return useMutation({
     mutationFn: (username: string) => {
       if (!user) throw new Error('Faça login para editar o perfil.');

@@ -23,7 +23,7 @@ export function useTypingIndicator(roomId: string | undefined) {
 
   useEffect(() => {
     if (!roomId) return undefined;
-    
+
     const channel = supabase.channel(`typing-${roomId}`);
     channel
       .on('broadcast', { event: 'typing' }, ({ payload }) => {
@@ -34,9 +34,9 @@ export function useTypingIndicator(roomId: string | undefined) {
         }));
       })
       .subscribe();
-      
+
     channelRef.current = channel;
-    
+
     return () => {
       supabase.removeChannel(channel);
       channelRef.current = null;
@@ -68,6 +68,6 @@ export function useTypingIndicator(roomId: string | undefined) {
   }, [user?.id, profile?.username]);
 
   const typingUsernames = Object.values(typing).map((t) => t.username);
-  
+
   return { typingUsernames, notifyTyping };
 }

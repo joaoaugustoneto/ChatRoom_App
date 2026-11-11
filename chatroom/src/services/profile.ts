@@ -19,7 +19,7 @@ export async function getProfile(userId: string): Promise<Profile> {
     .select('id, username, avatar_color')
     .eq('id', userId)
     .single();
-    
+
   if (error) throw error;
   return toProfile(data as ProfileRow);
 }

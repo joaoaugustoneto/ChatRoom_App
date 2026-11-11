@@ -36,21 +36,21 @@ let db;
 before(async () => {
   db = new PGlite();
   await db.exec(SUPABASE_STUBS);
-  
+
   const schema = readFileSync(`${SUPABASE}/schema.sql`, 'utf8').replace(
     'alter publication supabase_realtime add table public.messages;',
-    '-- pulado no teste local: a publication do Realtime só existe no Supabase'
+    '-- pulado no teste local: a publication do Realtime só existe no Supabase',
   );
   await db.exec(schema);
 
   // Três usuários o cadastro de cada um já dispara o gatilho e cria o perfil.
   await db.query(
-    "insert into auth.users (id, email, raw_user_meta_data) values ($1, 'ana@x.com', '{\"full_name\": \"Ana Souza\"}')",
-    [ALICE]
+    'insert into auth.users (id, email, raw_user_meta_data) values ($1, \'ana@x.com\', \'{"full_name": "Ana Souza"}\')',
+    [ALICE],
   );
   await db.query(
-    "insert into auth.users (id, email, raw_user_meta_data) values ($1, 'bob@x.com', '{\"full_name\": \"Bob\"}')",
-    [BOB]
+    'insert into auth.users (id, email, raw_user_meta_data) values ($1, \'bob@x.com\', \'{"full_name": "Bob"}\')',
+    [BOB],
   );
   await db.query("insert into auth.users (id, email) values ($1, 'carl@x.com')", [CARL]);
 });
@@ -60,7 +60,9 @@ after(async () => {
 });
 
 async function as(uid, fn) {
-  await db.exec(`set role authenticated; select set_config('request.jwt.claim.sub', '${uid ?? ''}', false);`);
+  await db.exec(
+    `set role authenticated; select set_config('request.jwt.claim.sub', '${uid ?? ''}', false);`,
+  );
   try {
     return await fn();
   } finally {
@@ -75,7 +77,7 @@ async function createRoom(uid, name = 'Sala geral') {
   return as(uid, async () => {
     const row = await one(
       'insert into rooms (name, created_by) values ($1, $2) returning id',
-      [name, uid]
+      [name, uid],
     );
     await db.query('insert into room_members (room_id, user_id) values ($1, $2)', [
       row.id,
@@ -90,7 +92,7 @@ const join = (uid, roomId) =>
     db.query('insert into room_members (room_id, user_id) values ($1, $2)', [
       roomId,
       uid,
-    ])
+    ]),
   );
 
 const send = (uid, roomId, body) =>
@@ -100,9 +102,9 @@ const send = (uid, roomId, body) =>
       (
         await one(
           'insert into messages (room_id, user_id, body) values ($1, $2, $3) returning id',
-          [roomId, uid, body]
+          [roomId, uid, body],
         )
-      ).id
+      ).id,
   );
 
 describe('perfis (gatilho automático)', () => {
@@ -115,24 +117,24 @@ describe('perfis (gatilho automático)', () => {
 
   it('qualquer usuário logado lê os perfis, mas só atualiza o próprio', async () => {
     assert.equal((await as(BOB, () => rows('select id from profiles'))).length, 3);
-    
+
     await as(ALICE, () =>
-      db.query("update profiles set username = 'Ana A.' where id = $1", [ALICE])
+      db.query("update profiles set username = 'Ana A.' where id = $1", [ALICE]),
     );
     assert.equal(
       (await one('select username from profiles where id = $1', [ALICE])).username,
-      'Ana A.'
+      'Ana A.',
     );
 
     // Update não "explode": ele só não encontra a linha de Alice para Bob
     // atualizar (o RLS filtra antes), então afeta 0 linhas e nada muda.
     const result = await as(BOB, () =>
-      db.query("update profiles set username = 'hack' where id = $1", [ALICE])
+      db.query("update profiles set username = 'hack' where id = $1", [ALICE]),
     );
     assert.equal(result.affectedRows ?? result.rowCount ?? 0, 0);
     assert.equal(
       (await one('select username from profiles where id = $1', [ALICE])).username,
-      'Ana A.'
+      'Ana A.',
     );
   });
 });
@@ -145,18 +147,18 @@ describe('salas e participação', () => {
     assert.equal(room.created_by, ALICE);
     assert.equal(
       Number(
-        (await one('select count(*) c from room_members where room_id = $1', [roomId])).c
+        (await one('select count(*) c from room_members where room_id = $1', [roomId])).c,
       ),
-      1
+      1,
     );
   });
 
   it('não é possível criar uma sala em nome de outro usuário', async () => {
     await assert.rejects(
       as(ALICE, () =>
-        db.query('insert into rooms (name, created_by) values ($1, $2)', ['Sala', BOB])
+        db.query('insert into rooms (name, created_by) values ($1, $2)', ['Sala', BOB]),
       ),
-      /row-level security/
+      /row-level security/,
     );
   });
 
@@ -167,51 +169,51 @@ describe('salas e participação', () => {
         db.query('insert into room_members (room_id, user_id) values ($1, $2)', [
           roomId,
           CARL,
-        ])
+        ]),
       ),
-      /row-level security/
+      /row-level security/,
     );
   });
 
   it('um membro vê os outros membros da mesma sala; quem está fora, não', async () => {
     const roomId = await createRoom(ALICE);
     await join(BOB, roomId);
-    
+
     assert.equal(
       (
         await as(BOB, () =>
-          rows('select user_id from room_members where room_id = $1', [roomId])
+          rows('select user_id from room_members where room_id = $1', [roomId]),
         )
       ).length,
-      2
+      2,
     );
 
     assert.equal(
       (
         await as(CARL, () =>
-          rows('select user_id from room_members where room_id = $1', [roomId])
+          rows('select user_id from room_members where room_id = $1', [roomId]),
         )
       ).length,
-      0
+      0,
     );
   });
 
   it('sair da sala apaga a própria participação, e só a própria', async () => {
     const roomId = await createRoom(ALICE);
     await join(BOB, roomId);
-    
+
     await as(BOB, () =>
       db.query('delete from room_members where room_id = $1 and user_id = $2', [
         roomId,
         BOB,
-      ])
+      ]),
     );
 
     assert.equal(
       Number(
-        (await one('select count(*) c from room_members where room_id = $1', [roomId])).c
+        (await one('select count(*) c from room_members where room_id = $1', [roomId])).c,
       ),
-      1
+      1,
     );
   });
 });
@@ -220,36 +222,36 @@ describe('mensagens', () => {
   it('só um membro da sala consegue enviar mensagem nela', async () => {
     const roomId = await createRoom(ALICE);
     await send(ALICE, roomId, 'Olá pessoal!');
-    
+
     await assert.rejects(send(BOB, roomId, 'Posso entrar?'), /row-level security/);
-    
+
     await join(BOB, roomId);
     await send(BOB, roomId, 'Agora sim!');
-    
+
     assert.equal(
       Number(
-        (await one('select count(*) c from messages where room_id = $1', [roomId])).c
+        (await one('select count(*) c from messages where room_id = $1', [roomId])).c,
       ),
-      2
+      2,
     );
   });
 
   it('só um membro da sala consegue ler as mensagens dela', async () => {
     const roomId = await createRoom(ALICE);
     await send(ALICE, roomId, 'Segredo do grupo');
-    
+
     assert.equal(
       (await as(BOB, () => rows('select id from messages where room_id = $1', [roomId])))
         .length,
-      0
+      0,
     );
 
     await join(BOB, roomId);
-    
+
     assert.equal(
       (await as(BOB, () => rows('select id from messages where room_id = $1', [roomId])))
         .length,
-      1
+      1,
     );
   });
 
@@ -263,30 +265,30 @@ describe('mensagens', () => {
   it('cada um só apaga a própria mensagem', async () => {
     const roomId = await createRoom(ALICE);
     await join(BOB, roomId);
-    
+
     const msgId = await send(ALICE, roomId, 'Vou apagar isso');
-    
+
     await as(BOB, () => db.query('delete from messages where id = $1', [msgId]));
     assert.equal(
       Number((await one('select count(*) c from messages where id = $1', [msgId])).c),
-      1
+      1,
     );
 
     await as(ALICE, () => db.query('delete from messages where id = $1', [msgId]));
     assert.equal(
       Number((await one('select count(*) c from messages where id = $1', [msgId])).c),
-      0
+      0,
     );
   });
 
   it('visitante (anon) não lê nem escreve nada', async () => {
     const roomId = await createRoom(ALICE);
     await db.exec('set role anon');
-    
+
     try {
       await assert.rejects(
         db.query('select * from messages where room_id = $1', [roomId]),
-        /permission denied/
+        /permission denied/,
       );
     } finally {
       await db.exec('reset role');

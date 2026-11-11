@@ -22,7 +22,8 @@ function toMessage(row: MessageRow): Message {
   };
 }
 
-const SELECT = 'id, room_id, user_id, body, created_at, profiles (username, avatar_color)';
+const SELECT =
+  'id, room_id, user_id, body, created_at, profiles (username, avatar_color)';
 
 // As últimas mensagens da sala, da mais antiga para a mais nova (pronto para
 // a lista). `limit` evita carregar um histórico gigante de uma vez.
@@ -33,7 +34,7 @@ export async function listMessages(roomId: string, limit = 100): Promise<Message
     .eq('room_id', roomId)
     .order('created_at', { ascending: false })
     .limit(limit);
-    
+
   if (error) throw error;
   return (data as unknown as MessageRow[]).map(toMessage).reverse();
 }
@@ -48,7 +49,7 @@ export async function sendMessage(
     .insert({ room_id: roomId, user_id: userId, body })
     .select(SELECT)
     .single();
-    
+
   if (error) throw error;
   return toMessage(data as unknown as MessageRow);
 }
@@ -66,7 +67,7 @@ export async function getMessage(id: string): Promise<Message> {
     .select(SELECT)
     .eq('id', id)
     .single();
-    
+
   if (error) throw error;
   return toMessage(data as unknown as MessageRow);
 }

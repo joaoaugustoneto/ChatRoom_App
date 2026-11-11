@@ -19,11 +19,11 @@ export function useRoomPresence(roomId: string | undefined): OnlineUser[] {
 
   useEffect(() => {
     if (!roomId || !user) return undefined;
-    
+
     const channel = supabase.channel(`presence-${roomId}`, {
       config: { presence: { key: user.id } },
     });
-    
+
     channel
       .on('presence', { event: 'sync' }, () => {
         const state = channel.presenceState<{ username: string }>();
@@ -39,11 +39,11 @@ export function useRoomPresence(roomId: string | undefined): OnlineUser[] {
           await channel.track({ username: profile?.username ?? 'Você' });
         }
       });
-      
+
     return () => {
       supabase.removeChannel(channel);
     };
   }, [roomId, user, profile?.username]);
-  
+
   return online;
 }

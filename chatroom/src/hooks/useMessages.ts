@@ -16,7 +16,7 @@ import type { Message } from '@/types';
 // qualquer aparelho que esteja com a tela aberta.
 export function useMessages(roomId: string | undefined) {
   const queryClient = useQueryClient();
-  
+
   const query = useQuery({
     queryKey: ['messages', roomId],
     queryFn: () => listMessages(roomId as string),
@@ -25,7 +25,7 @@ export function useMessages(roomId: string | undefined) {
 
   useEffect(() => {
     if (!roomId) return undefined;
-    
+
     const channel = supabase
       .channel(`room-messages-${roomId}`)
       .on(
@@ -50,7 +50,7 @@ export function useMessages(roomId: string | undefined) {
           } catch {
             // A mensagem pode ter sido apagada entre o evento e a busca — ignore.
           }
-        }
+        },
       )
       .on(
         'postgres_changes',
@@ -88,9 +88,9 @@ export function useSendMessage(roomId: string) {
   return useMutation({
     mutationFn: async (body: string) => {
       if (!user) throw new Error('Faça login para enviar mensagens.');
-      
+
       const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-      
+
       const optimistic: Message = {
         id: tempId,
         roomId,
@@ -100,12 +100,12 @@ export function useSendMessage(roomId: string) {
         username: profile?.username ?? 'Você',
         avatarColor: profile?.avatarColor ?? '#2563EB',
       };
-      
+
       queryClient.setQueryData<Message[]>(['messages', roomId], (old) => [
         ...(old ?? []),
         optimistic,
       ]);
-      
+
       try {
         const real = await sendMessage(roomId, user.id, body);
         queryClient.setQueryData<Message[]>(['messages', roomId], (old) =>
@@ -124,7 +124,7 @@ export function useSendMessage(roomId: string) {
 
 export function useDeleteMessage(roomId: string) {
   const queryClient = useQueryClient();
-  
+
   return useMutation({
     mutationFn: (id: string) => deleteMessage(id),
     onMutate: async (id) => {

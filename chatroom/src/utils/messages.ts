@@ -10,7 +10,7 @@ export function shouldGroupWithPrevious(
 ): boolean {
   if (!previous) return false;
   if (current.userId !== previous.userId) return false;
-  
+
   const gap =
     new Date(current.createdAt).getTime() - new Date(previous.createdAt).getTime();
   return gap >= 0 && gap <= GROUP_WINDOW_MS;
@@ -26,13 +26,13 @@ const sameDay = (a: Date, b: Date) => a.toDateString() === b.toDateString();
 // "Hoje", "Ontem" ou a data por extenso — para separar os dias na lista.
 export function formatDaySeparator(iso: string, now: Date = new Date()): string {
   const d = new Date(iso);
-  
+
   if (sameDay(d, now)) return 'Hoje';
-  
+
   const yesterday = new Date(now);
   yesterday.setDate(now.getDate() - 1);
   if (sameDay(d, yesterday)) return 'Ontem';
-  
+
   return d.toLocaleDateString('pt-BR', {
     day: '2-digit',
     month: 'long',
@@ -55,7 +55,7 @@ export function groupMessagesByDay(
   for (const m of messages) {
     const label = formatDaySeparator(m.createdAt, now);
     const last = sections[sections.length - 1];
-    
+
     if (last && last.label === label) last.messages.push(m);
     else sections.push({ label, messages: [m] });
   }
