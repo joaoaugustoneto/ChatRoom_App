@@ -296,7 +296,28 @@ Este documento detalha todos os erros identificados durante a análise e impleme
 
 ---
 
-## 15. Resumo Geral de Validações de Qualidade e Segurança
+## 15. Falha no Workflow do GitHub Actions por Versão Não Especificada do pnpm (`Error: No pnpm version is specified`)
+
+- **Etapa Relacionada:** Desafio 10 do Apêndice C (Integração Contínua com GitHub Actions)
+- **Arquivos Afetados:** `.github/workflows/test.yml`, `chatroom/package.json`
+- **Sintoma / Mensagem de Erro no GitHub Actions:**
+  ```text
+  Run pnpm/action-setup@v4
+  Running self-installer...
+  Error: No pnpm version is specified.
+  Please specify it by one of the following ways:
+  - in the GitHub Action config with the key "version"
+  - in the package.json with the key "packageManager"
+  ```
+- **Causa Raiz:** A action oficial `pnpm/action-setup@v4` requer explicitamente que a versão do pnpm seja declarada na chave `version` do arquivo YAML ou via propriedade `"packageManager"` no `package.json`. Como ambas estavam omitidas, a action interrompeu a pipeline logo no início do runner Ubuntu.
+- **Solução Aplicada:**
+  1. Configurada a chave `version: 10` na action `pnpm/action-setup@v4` em `.github/workflows/test.yml`.
+  2. Adicionada a propriedade `"packageManager": "pnpm@10.26.1"` em `chatroom/package.json` conforme as especificações do Node/Corepack.
+  3. Reordenados os steps da pipeline para inicializar o pnpm antes do `actions/setup-node@v4`, permitindo que o cache nativo de dependências funcione de forma otimizada.
+
+---
+
+## 16. Resumo Geral de Validações de Qualidade e Segurança
 
 Ao término de todas as etapas (1 a 14) do guia principal e de todos os 10 desafios do Apêndice C:
 

@@ -1,6 +1,7 @@
 {
   "name": "chatroom",
   "version": "1.0.0",
+  "packageManager": "pnpm@10.26.1",
   "main": "expo-router/entry",
   "dependencies": {
     "@expo/vector-icons": "^15.0.2",
