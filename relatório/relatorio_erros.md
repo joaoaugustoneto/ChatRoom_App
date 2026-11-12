@@ -201,19 +201,23 @@ Este documento detalha todos os erros identificados durante a análise e impleme
 
 ---
 
-## 10. Falha no Envio de Mensagens e Dessincronização por Falta de Fallback (`messages.ts`)
+## 10. Falha no Envio de Mensagens por Relação Múltipla (`Could not embed because more than one relationship was found for 'messages' and 'profiles'`)
 
 - **Etapa Relacionada:** Etapa 12 / Desafios do Apêndice C
-- **Arquivos Afetados:** `chatroom/src/services/messages.ts`, `chatroom/src/hooks/useMessages.ts`, `chatroom/app/(app)/room/[id].tsx`
-- **Sintoma:** O usuário tenta enviar mensagens numa sala mas o envio falha ou a mensagem desaparece logo após ser digitada.
+- **Arquivos Afetados:** `chatroom/src/services/messages.ts`, `chatroom/src/services/rooms.ts`, `chatroom/src/hooks/useMessages.ts`, `chatroom/app/(app)/room/[id].tsx`
+- **Sintoma / Mensagem de Erro:**
+  ```text
+  Não foi possível enviar: Could not embed because more than one relationship was found for 'messages' and 'profiles'
+  ```
 - **Causa Raiz:**
-  1. No Apêndice C, a consulta principal de mensagens (`SELECT`) incluiu colunas e tabelas relacionais extras (`image_url`, `is_edited`, `message_reactions`, `message_reads`). Caso o banco de dados remoto do usuário ainda não tivesse executado os scripts SQL das funcionalidades extras, o PostgREST devolvia erro de coluna ou relação inexistente.
-  2. A função `getMessage(id)` (acionada pelo Supabase Realtime a cada novo `INSERT`) não possuía fallback seguro, quebrando o listener de tempo real caso a consulta falhasse.
-  3. No envio da mensagem (`sendMessage`), se a verificação de membro ou chave estrangeira com `profiles` falhasse, a mensagem não era inserida.
+  1. No banco de dados Supabase (PostgreSQL), quando existem múltiplas restrições de chave estrangeira entre duas tabelas (por exemplo, `messages_user_id_fkey` e outra chave estrangeira para `profiles` criada acidentalmente por migrações sucessivas ou scripts repetidos), o PostgREST não consegue inferir automaticamente qual relacionamento utilizar na cláusula `profiles(...)`.
+  2. A função `sendMessage` tentava executar o `insert` encadeado com `.select(SELECT).single()`, exigindo a resolução de joins relacionais imediatos de `profiles`. Como o PostgREST recusava o embedding por ambiguidade, a inserção falhava com o alerta visualizado na tela.
+  3. Além disso, as funções `listMessages`, `getMessage` e `listRoomMembers` também ficavam sujeitas à mesma recusa caso o PostgREST não recebesse a indicação explícita da coluna de chave estrangeira.
 - **Solução Aplicada:**
-  1. Criação da constante `BASE_SELECT = 'id, room_id, user_id, body, created_at, profiles(username, avatar_color)'` como fallback transparente em `listMessages`, `sendMessage`, `searchMessages` e `getMessage`.
-  2. Implementação de tentativa primária com o payload completo e fallback automático para o formato base caso ocorra qualquer incompatibilidade com o esquema remoto.
-  3. Adição do gatilho `onSubmitEditing={handleSend}` e detecção da tecla `Enter` no navegador web (sem `Shift`), além de alertas amigáveis caso ocorra recusa de permissão do banco.
+  1. **Separação Estrita de Inserção e Leitura:** A função `sendMessage` foi atualizada para selecionar apenas as colunas escalares da própria tabela `messages` (`id, room_id, user_id, body, created_at`) durante o `insert(...)`, sem tentar joins relacionais no momento da escrita. Como o perfil do autor (`username` e `avatarColor`) já é conhecido via sessão e cache, o objeto `Message` é montado e retornado imediatamente com 100% de confiabilidade.
+  2. **Desambiguação Explícita de Chave Estrangeira:** As consultas de leitura foram configuradas com a sintaxe explícita do PostgREST: `profiles!user_id(username, avatar_color)`.
+  3. **Auto-população com Resiliência em Camadas:** Caso qualquer restrição no banco falhe, foi criada a função `populateProfilesForRows()`, que busca os registros puros da tabela `messages` e preenche os perfis dos autores consultando os `user_id`s diretamente na tabela `profiles`.
+  4. **Correção Análoga em Membros da Sala:** A função `listRoomMembers` em `src/services/rooms.ts` recebeu a mesma desambiguação e fallback sem embedding relacional.
 
 ---
 

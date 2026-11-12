@@ -37,36 +37,124 @@ function toMessage(row: MessageRow): Message {
   };
 }
 
+// Consultas com desambiguação explícita de relação via chave estrangeira `user_id`
+const SELECT_DISAMBIGUATED =
+  'id, room_id, user_id, body, image_url, created_at, is_edited, profiles!user_id(username, avatar_color), message_reactions(emoji, user_id), message_reads(count)';
+
 const SELECT =
   'id, room_id, user_id, body, image_url, created_at, is_edited, profiles(username, avatar_color), message_reactions(emoji, user_id), message_reads(count)';
+
+const BASE_SELECT_DISAMBIGUATED =
+  'id, room_id, user_id, body, created_at, profiles!user_id(username, avatar_color)';
 
 const BASE_SELECT =
   'id, room_id, user_id, body, created_at, profiles(username, avatar_color)';
 
-// As últimas mensagens da sala, da mais antiga para a mais nova (pronto para
-// a lista). `limit` evita carregar um histórico gigante de uma vez.
+interface InsertedMessageRow {
+  id: string;
+  room_id: string;
+  user_id: string;
+  body: string;
+  created_at: string;
+}
+
+// Popula perfis manualmente caso PostgREST falhe na resolução de chaves estrangeiras duplicadas
+async function populateProfilesForRows(rawRows: unknown[]): Promise<MessageRow[]> {
+  const rows = (rawRows ?? []) as MessageRow[];
+  if (rows.length === 0) return [];
+
+  const missingUserIds = Array.from(
+    new Set(
+      rows
+        .filter((r) => !r.profiles)
+        .map((r) => r.user_id)
+        .filter(Boolean),
+    ),
+  );
+
+  const profileMap = new Map<string, { username: string; avatar_color: string }>();
+
+  if (missingUserIds.length > 0) {
+    const { data: profs } = await supabase
+      .from('profiles')
+      .select('id, username, avatar_color')
+      .in('id', missingUserIds);
+
+    if (profs) {
+      for (const p of profs) {
+        profileMap.set(p.id, { username: p.username, avatar_color: p.avatar_color });
+      }
+    }
+  }
+
+  return rows.map((r) => ({
+    ...r,
+    profiles: r.profiles ?? profileMap.get(r.user_id) ?? null,
+  }));
+}
+
+// As últimas mensagens da sala, da mais antiga para a mais nova (pronto para a lista).
 export async function listMessages(roomId: string, limit = 100): Promise<Message[]> {
-  const { data, error } = await supabase
+  // 1. Tenta desambiguado com tabelas estendidas (Apêndice C)
+  const { data: d1, error: e1 } = await supabase
+    .from('messages')
+    .select(SELECT_DISAMBIGUATED)
+    .eq('room_id', roomId)
+    .order('created_at', { ascending: false })
+    .limit(limit);
+
+  if (!e1 && d1) {
+    return (d1 as unknown as MessageRow[]).map(toMessage).reverse();
+  }
+
+  // 2. Tenta padrão com tabelas estendidas
+  const { data: d2, error: e2 } = await supabase
     .from('messages')
     .select(SELECT)
     .eq('room_id', roomId)
     .order('created_at', { ascending: false })
     .limit(limit);
 
-  if (!error && data) {
-    return (data as unknown as MessageRow[]).map(toMessage).reverse();
+  if (!e2 && d2) {
+    return (d2 as unknown as MessageRow[]).map(toMessage).reverse();
   }
 
-  // Fallback seguro caso tabelas/colunas extras ainda não existam no Supabase
-  const { data: baseData, error: baseError } = await supabase
+  // 3. Tenta desambiguado básico
+  const { data: d3, error: e3 } = await supabase
+    .from('messages')
+    .select(BASE_SELECT_DISAMBIGUATED)
+    .eq('room_id', roomId)
+    .order('created_at', { ascending: false })
+    .limit(limit);
+
+  if (!e3 && d3) {
+    return (d3 as unknown as MessageRow[]).map(toMessage).reverse();
+  }
+
+  // 4. Tenta básico padrão
+  const { data: d4, error: e4 } = await supabase
     .from('messages')
     .select(BASE_SELECT)
     .eq('room_id', roomId)
     .order('created_at', { ascending: false })
     .limit(limit);
 
-  if (baseError) throw baseError;
-  return (baseData as unknown as MessageRow[]).map(toMessage).reverse();
+  if (!e4 && d4) {
+    return (d4 as unknown as MessageRow[]).map(toMessage).reverse();
+  }
+
+  // 5. Fallback seguro sem embed: busca mensagens puras e popula perfis
+  const { data: rawData, error: rawError } = await supabase
+    .from('messages')
+    .select('id, room_id, user_id, body, created_at')
+    .eq('room_id', roomId)
+    .order('created_at', { ascending: false })
+    .limit(limit);
+
+  if (rawError) throw rawError;
+
+  const populated = await populateProfilesForRows(rawData ?? []);
+  return populated.map(toMessage).reverse();
 }
 
 export async function sendMessage(
@@ -75,45 +163,63 @@ export async function sendMessage(
   body: string,
   imageUrl?: string,
 ): Promise<Message> {
-  try {
-    await getProfile(userId);
-  } catch {
-    // ignore
+  // Garante a existência do perfil local/remoto do autor
+  const profile = await getProfile(userId).catch(() => ({
+    id: userId,
+    username: 'Você',
+    avatarColor: '#2563EB',
+  }));
+
+  const insertPayload: Record<string, unknown> = {
+    room_id: roomId,
+    user_id: userId,
+    body,
+  };
+  if (imageUrl) {
+    insertPayload.image_url = imageUrl;
   }
 
-  // Tenta insert com image_url e SELECT completo
-  try {
-    const insertPayload: Record<string, unknown> = {
-      room_id: roomId,
-      user_id: userId,
-      body,
-    };
-    if (imageUrl) {
-      insertPayload.image_url = imageUrl;
-    }
+  // Insere na tabela messages sem tentar embed relacional na resposta do INSERT
+  // (evita erro 'Could not embed because more than one relationship was found')
+  let inserted: InsertedMessageRow | null = null;
 
-    const { data, error } = await supabase
-      .from('messages')
-      .insert(insertPayload)
-      .select(SELECT)
-      .single();
-
-    if (!error && data) {
-      return toMessage(data as unknown as MessageRow);
-    }
-  } catch {
-    // fallback
-  }
-
-  // Fallback seguro caso colunas extras (image_url, message_reactions) não existam no banco remoto
-  const { data: fallbackData, error: fallbackError } = await supabase
+  const { data, error } = await supabase
     .from('messages')
-    .insert({ room_id: roomId, user_id: userId, body })
-    .select(BASE_SELECT)
+    .insert(insertPayload)
+    .select('id, room_id, user_id, body, created_at')
     .single();
 
-  if (fallbackError) throw fallbackError;
-  return toMessage(fallbackData as unknown as MessageRow);
+  if (!error && data) {
+    inserted = data as unknown as InsertedMessageRow;
+  } else {
+    // Fallback sem image_url caso a coluna ainda não exista
+    const { data: fallbackData, error: fallbackError } = await supabase
+      .from('messages')
+      .insert({ room_id: roomId, user_id: userId, body })
+      .select('id, room_id, user_id, body, created_at')
+      .single();
+
+    if (fallbackError) throw fallbackError;
+    inserted = fallbackData as unknown as InsertedMessageRow;
+  }
+
+  if (!inserted) {
+    throw new Error('Falha ao registrar mensagem no banco de dados.');
+  }
+
+  return {
+    id: inserted.id,
+    roomId: inserted.room_id,
+    userId: inserted.user_id,
+    body: inserted.body,
+    imageUrl,
+    createdAt: inserted.created_at,
+    username: profile.username,
+    avatarColor: profile.avatarColor,
+    isEdited: false,
+    reactions: [],
+    readByCount: 0,
+  };
 }
 
 export async function editMessage(id: string, newBody: string): Promise<void> {
@@ -176,27 +282,42 @@ export async function markMessagesAsRead(
 export async function searchMessages(roomId: string, query: string): Promise<Message[]> {
   const clean = query.trim();
   if (!clean) return [];
-  const { data, error } = await supabase
+
+  // 1. Tenta desambiguado com reações
+  const { data: d1, error: e1 } = await supabase
+    .from('messages')
+    .select(SELECT_DISAMBIGUATED)
+    .eq('room_id', roomId)
+    .ilike('body', `%${clean}%`)
+    .order('created_at', { ascending: true });
+
+  if (!e1 && d1) {
+    return (d1 as unknown as MessageRow[]).map(toMessage);
+  }
+
+  // 2. Tenta padrão
+  const { data: d2, error: e2 } = await supabase
     .from('messages')
     .select(SELECT)
     .eq('room_id', roomId)
     .ilike('body', `%${clean}%`)
     .order('created_at', { ascending: true });
 
-  if (!error && data) {
-    return (data as unknown as MessageRow[]).map(toMessage);
+  if (!e2 && d2) {
+    return (d2 as unknown as MessageRow[]).map(toMessage);
   }
 
-  // Fallback caso tabelas/colunas de reações ou leituras não existam
+  // 3. Fallback sem embed
   const { data: baseData, error: baseError } = await supabase
     .from('messages')
-    .select(BASE_SELECT)
+    .select('id, room_id, user_id, body, created_at')
     .eq('room_id', roomId)
     .ilike('body', `%${clean}%`)
     .order('created_at', { ascending: true });
 
   if (baseError) throw baseError;
-  return (baseData as unknown as MessageRow[]).map(toMessage);
+  const populated = await populateProfilesForRows(baseData ?? []);
+  return populated.map(toMessage);
 }
 
 // Upload de imagem para Supabase Storage
@@ -204,30 +325,64 @@ export async function uploadMessageImage(
   roomId: string,
   fileUri: string,
 ): Promise<string> {
-  // Para fins do app com Expo, permite enviar URI de imagem
   return fileUri;
 }
 
-// Busca uma mensagem especifica pelo id (usada quando o Realtime avisa de um
-// INSERT ou UPDATE: o evento vem "cru", sem o join do perfil, então buscamos completa).
+// Busca uma mensagem especifica pelo id (usada quando o Realtime avisa de um INSERT ou UPDATE)
 export async function getMessage(id: string): Promise<Message> {
-  const { data, error } = await supabase
+  // 1. Tenta desambiguado completo
+  const { data: d1, error: e1 } = await supabase
+    .from('messages')
+    .select(SELECT_DISAMBIGUATED)
+    .eq('id', id)
+    .maybeSingle();
+
+  if (!e1 && d1) {
+    return toMessage(d1 as unknown as MessageRow);
+  }
+
+  // 2. Tenta padrão completo
+  const { data: d2, error: e2 } = await supabase
     .from('messages')
     .select(SELECT)
     .eq('id', id)
-    .single();
+    .maybeSingle();
 
-  if (!error && data) {
-    return toMessage(data as unknown as MessageRow);
+  if (!e2 && d2) {
+    return toMessage(d2 as unknown as MessageRow);
   }
 
-  // Fallback caso tabelas/colunas extras não existam
-  const { data: baseData, error: baseError } = await supabase
+  // 3. Tenta desambiguado básico
+  const { data: d3, error: e3 } = await supabase
+    .from('messages')
+    .select(BASE_SELECT_DISAMBIGUATED)
+    .eq('id', id)
+    .maybeSingle();
+
+  if (!e3 && d3) {
+    return toMessage(d3 as unknown as MessageRow);
+  }
+
+  // 4. Tenta básico padrão
+  const { data: d4, error: e4 } = await supabase
     .from('messages')
     .select(BASE_SELECT)
     .eq('id', id)
+    .maybeSingle();
+
+  if (!e4 && d4) {
+    return toMessage(d4 as unknown as MessageRow);
+  }
+
+  // 5. Fallback sem embed
+  const { data: raw, error: rawError } = await supabase
+    .from('messages')
+    .select('id, room_id, user_id, body, created_at')
+    .eq('id', id)
     .single();
 
-  if (baseError) throw baseError;
-  return toMessage(baseData as unknown as MessageRow);
+  if (rawError) throw rawError;
+
+  const populated = await populateProfilesForRows([raw]);
+  return toMessage(populated[0]);
 }

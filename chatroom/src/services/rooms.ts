@@ -184,16 +184,57 @@ export interface RoomMember {
 }
 
 export async function listRoomMembers(roomId: string): Promise<RoomMember[]> {
+  // 1. Tenta com desambiguação explícita de foreign key
+  const { data: disData, error: disError } = await supabase
+    .from('room_members')
+    .select('user_id, profiles!user_id(username, avatar_color)')
+    .eq('room_id', roomId);
+
+  if (!disError && disData) {
+    return (disData as unknown as MemberRow[]).map((r) => ({
+      userId: r.user_id,
+      username: r.profiles?.username ?? 'Alguém',
+      avatarColor: r.profiles?.avatar_color ?? '#2563EB',
+    }));
+  }
+
+  // 2. Tenta padrão
   const { data, error } = await supabase
     .from('room_members')
     .select('user_id, profiles(username, avatar_color)')
     .eq('room_id', roomId);
 
-  if (error) throw error;
+  if (!error && data) {
+    return (data as unknown as MemberRow[]).map((r) => ({
+      userId: r.user_id,
+      username: r.profiles?.username ?? 'Alguém',
+      avatarColor: r.profiles?.avatar_color ?? '#2563EB',
+    }));
+  }
 
-  return (data as unknown as MemberRow[]).map((r) => ({
-    userId: r.user_id,
-    username: r.profiles?.username ?? 'Alguém',
-    avatarColor: r.profiles?.avatar_color ?? '#2563EB',
-  }));
+  // 3. Fallback sem embed: busca os membros e depois popula perfis
+  const { data: memberRows, error: memberError } = await supabase
+    .from('room_members')
+    .select('user_id')
+    .eq('room_id', roomId);
+
+  if (memberError) throw memberError;
+  const userIds = (memberRows as { user_id: string }[]).map((m) => m.user_id);
+  if (userIds.length === 0) return [];
+
+  const { data: profs } = await supabase
+    .from('profiles')
+    .select('id, username, avatar_color')
+    .in('id', userIds);
+
+  const profMap = new Map((profs ?? []).map((p) => [p.id, p]));
+
+  return userIds.map((uid) => {
+    const p = profMap.get(uid);
+    return {
+      userId: uid,
+      username: p?.username ?? 'Alguém',
+      avatarColor: p?.avatar_color ?? '#2563EB',
+    };
+  });
 }
